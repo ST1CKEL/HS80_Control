@@ -38,8 +38,16 @@ check: check-version test
 	appstreamcli validate --no-net --strict data/metainfo/io.github.hs80control.App.metainfo.xml
 	xmllint --noout data/metainfo/io.github.hs80control.App.metainfo.xml data/icons/io.github.hs80control.App.svg
 	udevadm verify --no-summary data/udev/70-hs80-control.rules
-	systemd-analyze --user --man=no verify data/systemd/hs80d.service data/systemd/hs80-spatial.service
-	systemd-analyze --user --man=no verify data/systemd/hs80d-user-local.service
+	@set -e; runtime_dir="$${XDG_RUNTIME_DIR:-}"; \
+	if [ -z "$$runtime_dir" ]; then \
+		temporary_runtime_dir="$$(mktemp -d)"; \
+		runtime_dir="$$temporary_runtime_dir"; \
+		trap 'rm -rf -- "$$temporary_runtime_dir"' EXIT; \
+	fi; \
+	XDG_RUNTIME_DIR="$$runtime_dir" systemd-analyze --user --man=no verify \
+		data/systemd/hs80d.service data/systemd/hs80-spatial.service; \
+	XDG_RUNTIME_DIR="$$runtime_dir" systemd-analyze --user --man=no verify \
+		data/systemd/hs80d-user-local.service
 
 check-prefix:
 	@test "$(PREFIX)" = /usr || { \

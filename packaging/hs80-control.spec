@@ -81,6 +81,7 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 %changelog
 * Thu Aug 13 2026 ST1CKEL - 0.1.1-1
 - Fix HS80 response matching and active headset endpoint discovery
+- Make user-unit validation work in clean build containers
 
 * Mon Aug 10 2026 ST1CKEL - 0.1.0-1
 - Initial Fedora package
