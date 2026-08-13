@@ -1,0 +1,84 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-311:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Select Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependency
+        run: python -m pip install dbus-next
+
+      - name: Run compatibility tests
+        run: |
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python -m unittest discover -s tests -v
+          PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python -m compileall -q src tests
+
+  fedora:
+    runs-on: ubuntu-latest
+    container: fedora:44
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Install build and validation tools
+        run: >-
+          dnf --assumeyes install
+          alsa-utils appstream desktop-file-utils diffutils gzip gtk4 hidapi
+          libadwaita libxml2 make pipewire pipewire-utils python3
+          python3-dbus-next python3-gobject rpm-build systemd
+          systemd-rpm-macros systemd-udev tar wireplumber
+
+      - name: Run project checks
+        run: make check
+
+      - name: Verify staged installation
+        run: |
+          stage_dir=$(mktemp -d)
+          make install DESTDIR="$stage_dir"
+          test -x "$stage_dir/usr/bin/hs80-control"
+          test -x "$stage_dir/usr/bin/hs80ctl"
+          test -x "$stage_dir/usr/libexec/hs80d"
+          test -f "$stage_dir/usr/lib/systemd/user/hs80d.service"
+          test -f "$stage_dir/usr/share/metainfo/io.github.hs80control.App.metainfo.xml"
+          PYTHONDONTWRITEBYTECODE=1 "$stage_dir/usr/bin/hs80-control" --version
+          PYTHONDONTWRITEBYTECODE=1 "$stage_dir/usr/bin/hs80ctl" --version
+          PYTHONDONTWRITEBYTECODE=1 "$stage_dir/usr/libexec/hs80d" --version
+
+      - name: Verify release metadata and reproducibility
+        run: |
+          rpmspec --parse packaging/hs80-control.spec >/dev/null
+          make dist
+          version=$(sed -n 's/^__version__[[:space:]]*=[[:space:]]*"\([^"]*\)"/\1/p' src/hs80_control/__init__.py)
+          cp "dist/hs80-control-$version.tar.gz" /tmp/hs80-control-first.tar.gz
+          make --always-make dist
+          cmp /tmp/hs80-control-first.tar.gz "dist/hs80-control-$version.tar.gz"
+          tar -tzf "dist/hs80-control-$version.tar.gz" >/dev/null
+
+      - name: Build source and binary RPMs
+        run: |
+          mkdir -p build/rpmbuild/BUILD build/rpmbuild/BUILDROOT
+          mkdir -p build/rpmbuild/RPMS build/rpmbuild/SOURCES
+          mkdir -p build/rpmbuild/SPECS build/rpmbuild/SRPMS build/rpmbuild/tmp
+          rpmbuild -ba packaging/hs80-control.spec \
+            --define "_topdir $PWD/build/rpmbuild" \
+            --define "_tmppath $PWD/build/rpmbuild/tmp" \
+            --define "_sourcedir $PWD/dist"

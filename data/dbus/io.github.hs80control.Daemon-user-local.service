@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=io.github.hs80control.Daemon
+Exec=/usr/bin/systemctl --user start hs80d.service
+SystemdService=hs80d.service

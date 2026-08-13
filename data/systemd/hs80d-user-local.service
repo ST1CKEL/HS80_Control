@@ -1,0 +1,17 @@
+[Unit]
+Description=Corsair HS80 control daemon
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=io.github.hs80control.Daemon
+ExecStart=/usr/bin/env PYTHONPATH=%h/.local/lib/hs80-control /usr/bin/python3 -m hs80_control.daemon
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,24 @@
+[Unit]
+Description=HS80 binaural 7.1 PipeWire renderer
+After=pipewire.service wireplumber.service
+Wants=pipewire.service wireplumber.service
+BindsTo=pipewire.service
+PartOf=pipewire.service
+AssertPathExists=%E/hs80-control/pipewire.conf
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pipewire -c %E/hs80-control/pipewire.conf
+Restart=on-failure
+RestartSec=2
+TimeoutStartSec=10
+TimeoutStopSec=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+
+[Install]
+WantedBy=default.target pipewire.service

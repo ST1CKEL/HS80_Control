@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=HS80 Control
+Name[de]=HS80-Steuerung
+Comment=Control a Corsair HS80 headset
+Comment[de]=Corsair-HS80-Headset steuern
+Exec=hs80-control
+Icon=io.github.hs80control.App
+Terminal=false
+StartupNotify=true
+Categories=Settings;HardwareSettings;
+Keywords=Corsair;HS80;Headset;RGB;Sidetone;Spatial;PipeWire;
+Keywords[de]=Corsair;HS80;Headset;RGB;Sidetone;Raumklang;PipeWire;

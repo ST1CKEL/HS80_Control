@@ -1,0 +1,20 @@
+Copyright (C) 2026 HS80 Control contributors.
+
+HS80 Control is distributed under the GNU General Public License, version 3 or
+(at your option) any later version. The complete license text is in LICENSE.
+The AppStream metadata in data/metainfo is separately made available under
+CC0-1.0, as declared by its metadata_license element. The complete CC0 legal
+text is in LICENSE.CC0.
+
+HS80 Control is an independent, unofficial project and is not affiliated with
+Corsair Gaming, Inc. Corsair, HS80 and iCUE are trademarks of their respective
+owners.
+
+Protocol research was informed by publicly available GPL-licensed OpenLinkHub
+and HeadsetControl implementations and community USB captures. This project is
+distributed under GPL-3.0-or-later so that compatible source can be studied and
+shared under the same terms.
+
+The PipeWire spatial graph follows the public PipeWire 1.6.8 spatializer
+example. SOFA/HRTF data sets are separate works with their own licenses and are
+not distributed by this project.
