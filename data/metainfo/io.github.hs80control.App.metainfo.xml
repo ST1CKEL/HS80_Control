@@ -26,6 +26,11 @@
     <binary>hs80ctl</binary>
   </provides>
   <releases>
+    <release version="0.1.1" date="2026-08-13">
+      <description>
+        <p>Fix hardware response matching and active headset discovery.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-08-10">
       <description>
         <p>Initial implementation for receiver 1b1c:0a6b.</p>

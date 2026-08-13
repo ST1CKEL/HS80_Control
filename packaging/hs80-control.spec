@@ -1,5 +1,5 @@
 Name:           hs80-control
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Corsair HS80 RGB Wireless control service
 License:        GPL-3.0-or-later AND CC0-1.0
@@ -79,5 +79,8 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 %{_datadir}/icons/hicolor/scalable/apps/io.github.hs80control.App.svg
 
 %changelog
+* Thu Aug 13 2026 ST1CKEL - 0.1.1-1
+- Fix HS80 response matching and active headset endpoint discovery
+
 * Mon Aug 10 2026 ST1CKEL - 0.1.0-1
 - Initial Fedora package

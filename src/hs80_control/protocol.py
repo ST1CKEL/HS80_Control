@@ -33,13 +33,17 @@ CMD_FIRMWARE: Final = bytes((0x02, 0x13))
 CMD_BATTERY: Final = bytes((0x02, 0x0F))
 CMD_MIC_STATUS: Final = bytes((0x02, 0xA6))
 CMD_HEARTBEAT: Final = bytes((0x12,))
+CMD_VENDOR_ID: Final = bytes((0x02, 0x11))
+CMD_PRODUCT_ID: Final = bytes((0x02, 0x12))
+CMD_SUBDEVICE_BITFIELD: Final = bytes((0x02, 0x36))
 
 CMD_GET_DEVICES: Final = bytes((0x24,))
 CMD_RESOURCE_OPEN: Final = bytes((0x0D, 0x01))
 CMD_RESOURCE_CLOSE: Final = bytes((0x05, 0x01, 0x01))
 CMD_RESOURCE_READ: Final = bytes((0x08, 0x01))
-CMD_RESOURCE_WRITE: Final = bytes((0x09, 0x01))
+CMD_RESOURCE_PROBE: Final = bytes((0x09, 0x01))
 
+CMD_RGB_CLOSE: Final = bytes((0x05, 0x01, 0x00))
 CMD_RGB_OPEN: Final = bytes((0x0D, 0x00, 0x01))
 CMD_RGB_WRITE: Final = bytes((0x06, 0x00))
 CMD_SLEEP_ENDPOINT: Final = bytes((0x01, 0x0D, 0x00))
@@ -98,9 +102,9 @@ def _require(report: bytes, size: int, description: str) -> None:
 
 
 def parse_receiver_firmware(report: bytes) -> str:
-    _require(report, 7, "receiver firmware")
-    patch = int.from_bytes(report[5:7], "little")
-    return f"{report[3]}.{report[4]}.{patch}"
+    _require(report, 8, "receiver firmware")
+    patch = int.from_bytes(report[6:8], "little")
+    return f"{report[4]}.{report[5]}.{patch}"
 
 
 def parse_headset_firmware(report: bytes) -> str:
@@ -121,6 +125,18 @@ def parse_microphone_muted(report: bytes) -> bool:
     if report[4] not in (0, 1):
         raise ProtocolError(f"invalid microphone state: {report[4]}")
     return report[4] == 1
+
+
+def parse_device_identifier(report: bytes, description: str) -> int:
+    _require(report, 6, description)
+    return int.from_bytes(report[4:6], "little")
+
+
+def parse_subdevice_bitfield(report: bytes) -> int:
+    _require(report, 7, "receiver subdevice bitfield")
+    # Only channels 1..7 map to paired targets 0x09..0x0f. Ignore the
+    # receiver/reserved bit 0 and any firmware-specific upper flag bits.
+    return int.from_bytes(report[4:7], "little") & 0xFE
 
 
 def parse_event(report: bytes) -> DeviceEvent | None:

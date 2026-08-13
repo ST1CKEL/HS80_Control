@@ -23,13 +23,18 @@ from .protocol import (
     CMD_HARDWARE_MODE,
     CMD_HEARTBEAT,
     CMD_MIC_STATUS,
+    CMD_PRODUCT_ID,
+    CMD_RGB_CLOSE,
     CMD_RGB_OPEN,
     CMD_RGB_WRITE,
     CMD_SLEEP_DURATION,
     CMD_SLEEP_ENDPOINT,
     CMD_SOFTWARE_MODE,
+    CMD_SUBDEVICE_BITFIELD,
+    CMD_VENDOR_ID,
     RECEIVER_TARGET,
     SUPPORTED_HEADSET_PRODUCT_IDS,
+    VENDOR_ID,
     DeviceEvent,
     PairedDevice,
     ProtocolError,
@@ -37,14 +42,16 @@ from .protocol import (
     encode_sleep_duration,
     parse_battery_percent,
     parse_color,
+    parse_device_identifier,
     parse_headset_firmware,
     parse_microphone_muted,
     parse_paired_devices,
     parse_receiver_firmware,
+    parse_subdevice_bitfield,
 )
 from .spatial import SpatialManager
 from .state import DeviceState, StateStore
-from .transport import HidTransport
+from .transport import DeviceStatusError, HidTransport
 
 
 LOG = logging.getLogger(__name__)
@@ -362,8 +369,19 @@ class DeviceController:
             )
             transport.transfer(RECEIVER_TARGET, CMD_SOFTWARE_MODE)
             self._receiver_software_mode = True
-            resource = transport.read_resource(CMD_GET_DEVICES)
-            paired = parse_paired_devices(resource)
+            if hasattr(self.mixer, "bind_serial"):
+                self.mixer.bind_serial(node.serial)
+                self._refresh_mixer()
+            try:
+                resource = transport.read_resource(CMD_GET_DEVICES)
+                paired = parse_paired_devices(resource)
+            except (DeviceStatusError, ProtocolError) as exc:
+                # Some 0a6b firmware accepts the legacy 0x24 resource but
+                # rejects its read. A matched device error or malformed legacy
+                # content is safe to replace with the property-based fallback;
+                # timeouts and other I/O errors still rebuild the HID session.
+                LOG.debug("legacy paired-device list unavailable: %s", exc)
+                paired = []
             headset = next(
                 (
                     device
@@ -374,16 +392,25 @@ class DeviceController:
                 None,
             )
             if headset is None:
-                product_ids = ", ".join(f"0x{device.product_id:04x}" for device in paired) or "none"
-                raise ControllerError(f"no supported paired HS80 found (reported: {product_ids})")
+                headset = self._probe_active_headset(transport)
+            if headset is None:
+                product_ids = ", ".join(f"0x{device.product_id:04x}" for device in paired)
+                self.state.update(
+                    headset_connected=False,
+                    last_error=(
+                        f"no supported paired HS80 found (reported: {product_ids})"
+                        if product_ids
+                        else ""
+                    ),
+                )
+                self._next_heartbeat = time.monotonic() + 2.0
+                return
             self._headset = headset
+            self._headset_software_mode = False
             self.state.update(serial=headset.serial)
-            if hasattr(self.mixer, "bind_serial"):
-                self.mixer.bind_serial(node.serial)
-                self._refresh_mixer()
             try:
                 self._initialize_headset()
-            except (OSError, ProtocolError, ControllerError) as exc:
+            except (DeviceStatusError, ProtocolError, ControllerError) as exc:
                 # A powered-off wireless headset is normal. Keep the healthy
                 # receiver open and probe only the paired endpoint later.
                 self.state.update(headset_connected=False, last_error=str(exc))
@@ -391,6 +418,37 @@ class DeviceController:
         except Exception as exc:
             self._record_error(exc)
             self._disconnect(graceful=False)
+
+    def _probe_active_headset(self, transport: HidTransport) -> PairedDevice | None:
+        mapping = transport.transfer(RECEIVER_TARGET, CMD_SUBDEVICE_BITFIELD)
+        active = parse_subdevice_bitfield(mapping)
+        for device_type in range(1, 8):
+            if not active & (1 << device_type):
+                continue
+            endpoint = RECEIVER_TARGET + device_type
+            try:
+                vendor = parse_device_identifier(
+                    transport.transfer(endpoint, CMD_VENDOR_ID), "headset vendor ID"
+                )
+                if vendor != VENDOR_ID:
+                    continue
+                product = parse_device_identifier(
+                    transport.transfer(endpoint, CMD_PRODUCT_ID), "headset product ID"
+                )
+            except DeviceStatusError:
+                # The connection bitfield can briefly contain an endpoint that
+                # is going offline. A matched status error leaves the session
+                # synchronized, so later active channels remain safe to probe.
+                continue
+            if vendor == VENDOR_ID and product in SUPPORTED_HEADSET_PRODUCT_IDS:
+                return PairedDevice(
+                    vendor_id=vendor,
+                    product_id=product,
+                    device_type=device_type,
+                    endpoint=endpoint,
+                    serial="",
+                )
+        return None
 
     def _initialize_headset(self) -> None:
         transport, headset = self._require_transport_and_headset(require_online=False)
@@ -401,8 +459,7 @@ class DeviceController:
             self._headset_software_mode = True
             battery = transport.transfer(headset.endpoint, CMD_BATTERY)
             microphone = transport.transfer(headset.endpoint, CMD_MIC_STATUS)
-            transport.transfer(headset.endpoint, CMD_RGB_OPEN)
-            self._rgb_endpoint_open = True
+            self._open_rgb_endpoint(transport, headset.endpoint)
             self.state.update(
                 headset_connected=True,
                 firmware=parse_headset_firmware(firmware),
@@ -418,7 +475,12 @@ class DeviceController:
                 self._rgb_dirty = True
                 self._write_rgb(time.monotonic())
         except Exception:
-            self._rgb_endpoint_open = False
+            if self._rgb_endpoint_open:
+                try:
+                    transport.transfer(headset.endpoint, CMD_RGB_CLOSE, timeout_ms=400)
+                except Exception:
+                    pass
+                self._rgb_endpoint_open = False
             self.state.update(headset_connected=False)
             if self._headset_software_mode:
                 try:
@@ -440,14 +502,29 @@ class DeviceController:
             return
 
         if self._headset is None:
-            return
+            try:
+                self._headset = self._probe_active_headset(self._transport)
+            except (OSError, ProtocolError, ControllerError) as exc:
+                self._record_error(exc)
+                self._disconnect(graceful=False)
+                return
+            if self._headset is None:
+                self.state.update(headset_connected=False, last_error="")
+                return
+            self._headset_software_mode = False
+            self.state.update(serial=self._headset.serial)
         try:
             self._transport.transfer(self._headset.endpoint, CMD_HEARTBEAT)
             if not self.state.snapshot().headset_connected:
                 self._initialize_headset()
-        except (OSError, ProtocolError, ControllerError) as exc:
+        except DeviceStatusError as exc:
             self._rgb_endpoint_open = False
-            self.state.update(headset_connected=False, last_error=str(exc))
+            self._headset_software_mode = False
+            self._headset = None
+            self.state.update(headset_connected=False, serial="", last_error=str(exc))
+        except (OSError, ProtocolError, ControllerError) as exc:
+            self._record_error(exc)
+            self._disconnect(graceful=False)
 
     def _refresh_all(self) -> bool:
         if self._transport is None:
@@ -565,11 +642,18 @@ class DeviceController:
             microphone = (255, 0, 0)
 
         if not self._rgb_endpoint_open:
-            transport.transfer(headset.endpoint, CMD_RGB_OPEN)
-            self._rgb_endpoint_open = True
+            self._open_rgb_endpoint(transport, headset.endpoint)
         payload = encode_rgb_payload(logo, indicator, microphone, brightness)
         transport.transfer(headset.endpoint, CMD_RGB_WRITE, payload)
         self._rgb_dirty = False
+
+    def _open_rgb_endpoint(self, transport: HidTransport, endpoint: int) -> None:
+        # Lighting handle 0 can survive a mode switch or an unclean client
+        # exit. Closing it is idempotent and prevents open status 0x03 on the
+        # next daemon start.
+        transport.transfer(endpoint, CMD_RGB_CLOSE)
+        transport.transfer(endpoint, CMD_RGB_OPEN)
+        self._rgb_endpoint_open = True
 
     def _set_sleep_timer(self, minutes: int) -> bool:
         if not 0 <= minutes <= 90:
@@ -663,7 +747,9 @@ class DeviceController:
         elif event.kind == "connection" and isinstance(event.value, int):
             if event.value == 0:
                 self._rgb_endpoint_open = False
-                self.state.update(headset_connected=False)
+                self._headset_software_mode = False
+                self._headset = None
+                self.state.update(headset_connected=False, serial="")
             elif event.value == 2:
                 self._next_heartbeat = 0.0
 
@@ -684,6 +770,12 @@ class DeviceController:
         transport = self._transport
         headset = self._headset
         if transport is not None:
+            if headset is not None and self._rgb_endpoint_open:
+                try:
+                    transport.transfer(headset.endpoint, CMD_RGB_CLOSE, timeout_ms=400)
+                except Exception:
+                    pass
+                self._rgb_endpoint_open = False
             if headset is not None and self._headset_software_mode:
                 try:
                     transport.transfer(headset.endpoint, CMD_HARDWARE_MODE, timeout_ms=400)

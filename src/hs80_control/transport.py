@@ -9,8 +9,8 @@ from typing import Callable, Protocol
 from .protocol import (
     CMD_RESOURCE_CLOSE,
     CMD_RESOURCE_OPEN,
+    CMD_RESOURCE_PROBE,
     CMD_RESOURCE_READ,
-    CMD_RESOURCE_WRITE,
     READ_REPORT_SIZE,
     RECEIVER_TARGET,
     DeviceEvent,
@@ -34,6 +34,19 @@ class TransportError(OSError):
 
 class TransportTimeout(TransportError):
     """The receiver did not answer before the deadline."""
+
+
+class DeviceStatusError(TransportError):
+    """The receiver returned a matched Bragi response with an error status."""
+
+    def __init__(self, target: int, command: bytes, status: int) -> None:
+        self.target = target
+        self.command = bytes(command)
+        self.status = status
+        super().__init__(
+            f"device rejected {command.hex(' ')} on target 0x{target:02x} "
+            f"with status 0x{status:02x}"
+        )
 
 
 class HidTransport:
@@ -101,20 +114,23 @@ class HidTransport:
                     continue
                 # Interface 3 also carries media and vendor reports with IDs
                 # 0x0e, 0x0f, 0x11 and 0x58. Command responses are fixed-size
-                # report-ID 0x01 packets and echo the protocol marker/target.
-                # Paired-device responses additionally echo the first command
-                # byte at offset 3.  Receiver payloads start at that offset
-                # (notably firmware), so they cannot use the same check; a
-                # receiver timeout makes the controller disconnect and reopen
-                # the entire session instead of continuing desynchronized.
+                # report-ID 0x01 packets. Byte 1 is the zero-based target
+                # channel (receiver 0x08 -> 0, paired endpoint 0x09 -> 1), byte
+                # 2 echoes the command family and byte 3 is status/reserved.
+                # The payload starts at byte 4. A timeout makes the controller
+                # disconnect and reopen the session so another command in the
+                # same family cannot consume a delayed response.
+                response_channel = target - RECEIVER_TARGET
                 if (
                     len(response) != READ_REPORT_SIZE
+                    or not 0 <= response_channel <= 7
                     or response[0] != 0x01
-                    or response[1] != 0x02
-                    or response[2] != target
-                    or (target != RECEIVER_TARGET and response[3] != command[0])
+                    or response[1] != response_channel
+                    or response[2] != command[0]
                 ):
                     continue
+                if response[3] != 0:
+                    raise DeviceStatusError(target, command, response[3])
                 return response
 
     def poll_event(self, timeout_ms: int = 100) -> DeviceEvent | None:
@@ -134,24 +150,39 @@ class HidTransport:
         opened = False
         active_error: BaseException | None = None
         try:
-            self.transfer(RECEIVER_TARGET, CMD_RESOURCE_CLOSE, resource, timeout_ms)
-            self.transfer(RECEIVER_TARGET, CMD_RESOURCE_OPEN, resource, timeout_ms)
+            # Bragi resource IDs select the resource only while opening the
+            # fixed handle 1. Close, probe and read operate on that handle and
+            # must not receive the resource ID as an extra payload byte.
+            self.transfer(RECEIVER_TARGET, CMD_RESOURCE_CLOSE, b"", timeout_ms)
+            try:
+                self.transfer(RECEIVER_TARGET, CMD_RESOURCE_OPEN, resource, timeout_ms)
+            except DeviceStatusError as exc:
+                # Bragi status 0x03 means that the generic handle may still be
+                # open. Upstream implementations close it and retry once.
+                if exc.status != 0x03:
+                    raise
+                self.transfer(RECEIVER_TARGET, CMD_RESOURCE_CLOSE, b"", timeout_ms)
+                self.transfer(RECEIVER_TARGET, CMD_RESOURCE_OPEN, resource, timeout_ms)
             opened = True
-            self.transfer(RECEIVER_TARGET, CMD_RESOURCE_WRITE, resource, timeout_ms)
-            first = self.transfer(RECEIVER_TARGET, CMD_RESOURCE_READ, resource, timeout_ms)
+            probe = self.transfer(RECEIVER_TARGET, CMD_RESOURCE_PROBE, b"", timeout_ms)
+            resource_length = int.from_bytes(probe[5:9], "little")
+            if resource_length == 0:
+                return b""
+            if resource_length > 4096:
+                raise ProtocolError(f"invalid resource length: {resource_length}")
 
-            packet_count = first[6]
-            if packet_count == 0:
-                packet_count = 1
-            if packet_count > 16:
-                raise ProtocolError(f"invalid resource packet count: {packet_count}")
-
+            payload_capacity = READ_REPORT_SIZE - 4
+            packet_count = (resource_length + payload_capacity - 1) // payload_capacity
+            first = self.transfer(RECEIVER_TARGET, CMD_RESOURCE_READ, b"", timeout_ms)
             result = bytearray(first)
+            bytes_remaining = resource_length - payload_capacity
             for _ in range(1, packet_count):
                 continuation = self.transfer(
-                    RECEIVER_TARGET, CMD_RESOURCE_READ, resource, timeout_ms
+                    RECEIVER_TARGET, CMD_RESOURCE_READ, b"", timeout_ms
                 )
-                result.extend(continuation[3:])
+                take = min(payload_capacity, bytes_remaining)
+                result.extend(continuation[4 : 4 + take])
+                bytes_remaining -= take
             return bytes(result)
         except BaseException as exc:
             active_error = exc

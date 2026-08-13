@@ -11,10 +11,12 @@ from hs80_control.protocol import (
     encode_sleep_duration,
     parse_battery_percent,
     parse_color,
+    parse_device_identifier,
     parse_event,
     parse_headset_firmware,
     parse_paired_devices,
     parse_receiver_firmware,
+    parse_subdevice_bitfield,
 )
 
 
@@ -30,12 +32,22 @@ class ProtocolTests(unittest.TestCase):
             build_report(0x09, b"\x01", bytes(63))
 
     def test_firmware_and_battery_parsing(self) -> None:
-        receiver = bytes((1, 2, 3, 4, 5, 0x34, 0x12))
+        receiver = bytes((1, 0, 2, 0, 5, 9, 0x82, 0x00))
         headset = bytes((1, 2, 3, 4, 5, 6, 7))
         battery = bytes((1, 2, 3, 4, 0xB2, 0x02))
-        self.assertEqual("4.5.4660", parse_receiver_firmware(receiver))
+        self.assertEqual("5.9.130", parse_receiver_firmware(receiver))
         self.assertEqual("5.6.7", parse_headset_firmware(headset))
         self.assertEqual(69, parse_battery_percent(battery))
+
+        with self.assertRaisesRegex(ProtocolError, "receiver firmware report is too short"):
+            parse_receiver_firmware(receiver[:7])
+
+    def test_wireless_endpoint_properties(self) -> None:
+        identifier = bytes((1, 1, 2, 0, 0x69, 0x0A))
+        mapping = bytes((1, 0, 2, 0, 0x02, 0, 0))
+        self.assertEqual(0x0A69, parse_device_identifier(identifier, "product ID"))
+        self.assertEqual(0x02, parse_subdevice_bitfield(mapping))
+        self.assertEqual(0, parse_subdevice_bitfield(bytes((1, 0, 2, 0, 1, 1, 0))))
 
     def test_event_parsing(self) -> None:
         battery = bytes((EVENT_REPORT_ID, 1, 1, 0x0F, 0, 0xB2, 0x02))

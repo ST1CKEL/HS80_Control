@@ -15,9 +15,15 @@ from hs80_control.protocol import (
     CMD_FIRMWARE,
     CMD_HARDWARE_MODE,
     CMD_MIC_STATUS,
+    CMD_PRODUCT_ID,
+    CMD_RGB_CLOSE,
+    CMD_RGB_OPEN,
     CMD_RGB_WRITE,
+    CMD_SUBDEVICE_BITFIELD,
+    CMD_VENDOR_ID,
     RECEIVER_TARGET,
 )
+from hs80_control.transport import DeviceStatusError
 
 
 class FakeMixer:
@@ -77,7 +83,7 @@ class FakeTransport:
         self.calls.append((target, command, payload))
         response = bytearray(64)
         if target == RECEIVER_TARGET and command == CMD_FIRMWARE:
-            response[3:7] = bytes((1, 2, 3, 0))
+            response[4:8] = bytes((1, 2, 3, 0))
         elif command == CMD_FIRMWARE:
             response[4:7] = bytes((4, 5, 6))
         elif command == CMD_BATTERY:
@@ -141,6 +147,13 @@ class ControllerTests(unittest.TestCase):
             self.assertEqual("1.2.3", state.receiver_firmware)
             self.assertEqual("4.5.6", state.firmware)
             self.assertEqual("RECEIVER", mixer.serial)
+            rgb_close_index = next(
+                index for index, call in enumerate(transport.calls) if call[1] == CMD_RGB_CLOSE
+            )
+            rgb_open_index = next(
+                index for index, call in enumerate(transport.calls) if call[1] == CMD_RGB_OPEN
+            )
+            self.assertLess(rgb_close_index, rgb_open_index)
 
             self.assertTrue(
                 controller.set_rgb("static", 50, "#ff0000", "#00ff00", "#0000ff")
@@ -246,16 +259,100 @@ class ControllerTests(unittest.TestCase):
                 node_finder=lambda: node,
                 transport_factory=lambda _node, _callback: transport,  # type: ignore[arg-type]
             )
-            with self.assertLogs("hs80_control.controller", logging.WARNING):
-                controller.start()
-                deadline = time.monotonic() + 1
-                while controller.snapshot().last_error == "" and time.monotonic() < deadline:
-                    time.sleep(0.01)
-                state = controller.snapshot()
-                self.assertFalse(state.receiver_connected)
-                self.assertFalse(state.headset_connected)
-                self.assertIn("no supported paired HS80", state.last_error)
-                controller.stop()
+            controller.start()
+            deadline = time.monotonic() + 1
+            while controller.snapshot().last_error == "" and time.monotonic() < deadline:
+                time.sleep(0.01)
+            state = controller.snapshot()
+            self.assertTrue(state.receiver_connected)
+            self.assertFalse(state.headset_connected)
+            self.assertIn("no supported paired HS80", state.last_error)
+            controller.stop()
+
+    def test_empty_legacy_list_falls_back_to_active_headset_properties(self) -> None:
+        node = HidNode(
+            path=Path("/dev/hidraw-test"),
+            sysfs_path=Path("/sys/test"),
+            interface=3,
+            vendor_id=0x1B1C,
+            product_id=0x0A6B,
+            serial="RECEIVER",
+            product="HS80 Receiver",
+            readable=True,
+            writable=True,
+        )
+
+        class PropertyFallbackTransport(FakeTransport):
+            def read_resource(self, _resource: bytes, timeout_ms: int = 1000) -> bytes:
+                del timeout_ms
+                raise DeviceStatusError(RECEIVER_TARGET, bytes((0x08, 0x01)), 0x02)
+
+            def transfer(
+                self,
+                target: int,
+                command: bytes,
+                payload: bytes = b"",
+                timeout_ms: int = 1000,
+            ) -> bytes:
+                response = bytearray(super().transfer(target, command, payload, timeout_ms))
+                if target == RECEIVER_TARGET and command == CMD_SUBDEVICE_BITFIELD:
+                    response[4] = 0x02
+                elif target == 0x09 and command == CMD_VENDOR_ID:
+                    response[4:6] = (0x1B1C).to_bytes(2, "little")
+                elif target == 0x09 and command == CMD_PRODUCT_ID:
+                    response[4:6] = (0x0A69).to_bytes(2, "little")
+                return bytes(response)
+
+        transport = PropertyFallbackTransport()
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: node,
+                transport_factory=lambda _node, _callback: transport,  # type: ignore[arg-type]
+            )
+            controller.start()
+            deadline = time.monotonic() + 1
+            while not controller.snapshot().headset_connected and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+            state = controller.snapshot()
+            self.assertTrue(state.receiver_connected)
+            self.assertTrue(state.headset_connected)
+            self.assertEqual("4.5.6", state.firmware)
+            self.assertEqual(73, state.battery_percent)
+            controller.stop()
+
+    def test_active_probe_skips_rejected_channel_and_finds_later_hs80(self) -> None:
+        class MultipleEndpointTransport(FakeTransport):
+            def transfer(
+                self,
+                target: int,
+                command: bytes,
+                payload: bytes = b"",
+                timeout_ms: int = 1000,
+            ) -> bytes:
+                response = bytearray(super().transfer(target, command, payload, timeout_ms))
+                if target == RECEIVER_TARGET and command == CMD_SUBDEVICE_BITFIELD:
+                    response[4] = 0x06
+                elif target == 0x09 and command == CMD_VENDOR_ID:
+                    raise DeviceStatusError(target, command, 0x05)
+                elif target == 0x0A and command == CMD_VENDOR_ID:
+                    response[4:6] = (0x1B1C).to_bytes(2, "little")
+                elif target == 0x0A and command == CMD_PRODUCT_ID:
+                    response[4:6] = (0x0A69).to_bytes(2, "little")
+                return bytes(response)
+
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+            )
+            headset = controller._probe_active_headset(MultipleEndpointTransport())  # type: ignore[arg-type]
+            self.assertIsNotNone(headset)
+            self.assertEqual(0x0A, headset.endpoint if headset else None)
 
     def test_mixer_failure_has_separate_state_from_hid_error(self) -> None:
         class FailingMixer(FakeMixer):

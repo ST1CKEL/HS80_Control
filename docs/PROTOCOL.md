@@ -41,12 +41,17 @@ Geräteliste ermittelt und ist bei einem einzelnen Gerät üblicherweise `09`.
 1. Receiver-Firmware mit `02 13` lesen
 2. Receiver mit `01 03 00 02` in Softwaremodus setzen
 3. Ressource `24` öffnen und gekoppelte Geräte lesen
-4. ein gekoppeltes HS80 mit Produkt-ID `0a69` oder `0a71` auswählen
-5. Headset-Heartbeat `12`
-6. Headset-Firmware, Akku und Mikrofonstatus lesen
-7. Headset in Softwaremodus setzen und RGB-Endpunkt öffnen
+4. falls diese Legacy-Liste leer ist, aktive Funkkanäle über Eigenschaft `02 36`
+   ermitteln und Vendor-/Produkt-ID mit `02 11`/`02 12` direkt abfragen
+5. ein Corsair-HS80 mit Produkt-ID `0a69` oder `0a71` auswählen
+6. Headset-Heartbeat `12`
+7. Headset-Firmware, Akku und Mikrofonstatus lesen
+8. Headset in Softwaremodus setzen und RGB-Endpunkt öffnen
 
 Der gekoppelte Endpoint wird nicht hart codiert.
+Vor dem Öffnen der RGB-Ressource schließt der Daemon den idempotenten Handle 0,
+damit ein nach einem unvollständigen Client-Abbruch verbliebener Handle nicht
+als erfolgreicher Start missverstanden wird.
 
 ## Verwendete Kommandos
 
@@ -85,6 +90,14 @@ sofern der Mute-Indikator aktiviert ist.
 
 ## Statuswerte
 
+- Antworten verwenden `01 <TT-08> <erstes Kommandobyte> <Status> <Payload...>`.
+  Eine echte Receiver-Firmwareantwort auf `02 08 02 13 ...` war
+  `01 00 02 00 05 09 82 00 ...` und ergibt Firmware `5.9.130`.
+- Ein Statusbyte ungleich null ist eine Geräteablehnung und kein gültiger
+  Payload. Beim Legacy-Ressourcen-Read wurde auf diesem Receiver Status `02`
+  beobachtet; die Endpoint-Erkennung fällt dann auf Eigenschaft `02 36` zurück.
+- Receiver-Firmware: Major/Minor in Bytes 4 und 5, Patch als Little-Endian in
+  Bytes 6 und 7
 - Akkuantwort: Little-Endian-Zehntelprozent in Bytes 4 und 5
 - Mikrofonantwort: Byte 4, `0=aktiv`, `1=stumm`
 - Firmware des Headsets: Bytes 4 bis 6
