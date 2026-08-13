@@ -1,9 +1,44 @@
 # HS80 Control
 
-Linux-Steuerung für den **Corsair HS80 RGB Wireless Receiver** mit der USB-ID
-`1b1c:0a6b`. Das Projekt besteht aus einem Benutzerdienst, einer D-Bus-API,
-einem Kommandozeilenprogramm und einer GTK4/libadwaita-Oberfläche, die unter
-KDE Plasma und Wayland läuft.
+Linux-Steuerung für ein kompatibles **Corsair HS80 RGB Wireless** mit dem
+USB-Empfänger `1b1c:0a6b`. Das Projekt besteht aus einem Benutzerdienst, einer
+D-Bus-API, einem Kommandozeilenprogramm und einer GTK4/libadwaita-Oberfläche,
+die unter KDE Plasma und Wayland läuft.
+
+## Hardware-Kompatibilität
+
+HS80 Control unterstützt gezielt die folgende Hardware und nicht pauschal die
+gesamte HS80-Produktfamilie:
+
+| Variante | Kennungen | Status |
+| --- | --- | --- |
+| Corsair HS80 RGB Wireless | Receiver `1b1c:0a6b`, interne Headset-PID `0a69` | Unterstützt und an echter Hardware bestätigt |
+| HS80 RGB Wireless mit alternativer interner PID | Receiver `1b1c:0a6b`, interne Headset-PID `0a71` | Im Code experimentell berücksichtigt; diese Kombination ist nicht an Hardware bestätigt |
+| HS80 MAX, HS80 RGB USB/Wired sowie Xbox- oder Bluetooth-Varianten | anderer oder kein kompatibler Receiver | Nicht unterstützt |
+| HS80 mit einer anderen Receiver-USB-ID | nicht `1b1c:0a6b` | Nicht unterstützt |
+
+Die interne Headset-PID wird über den Receiver abgefragt und erscheint
+normalerweise nicht als separates USB-Gerät in `lsusb`. Sondereditionen sind
+nur dann voraussichtlich kompatibel, wenn sie denselben Receiver und eine der
+beiden genannten internen PIDs verwenden. Ein erster lokaler Infrastrukturtest
+ist:
+
+```bash
+hs80ctl doctor
+```
+
+`doctor` prüft Receiver, Zugriffsrechte, ALSA und PipeWire, aber nicht allein
+die interne Headset-PID. Vollständig bestätigt ist die Kombination erst, wenn
+der laufende Daemon das Headset nach seiner PID-Prüfung als verbunden meldet:
+
+```bash
+hs80ctl status
+```
+
+Mehrere gleichzeitig angeschlossene kompatible Receiver werden noch nicht
+unterstützt. Der Daemon verwendet den zuerst gefundenen Receiver; Spatial
+Audio bricht bei mehreren passenden physischen PipeWire-Sinks mit einer
+eindeutigen Fehlermeldung ab.
 
 ## Funktionen
 
@@ -32,6 +67,9 @@ vorhanden:
 sudo dnf install python3 python3-dbus-next python3-gobject gtk4 libadwaita \
   hidapi alsa-utils pipewire pipewire-utils wireplumber
 ```
+
+Die neue adaptive Oberfläche benötigt libadwaita 1.7 oder neuer; Fedora 44
+erfüllt diese Voraussetzung.
 
 Für Spatial Audio zusätzlich:
 

@@ -2,7 +2,8 @@
 <component type="desktop-application">
   <id>io.github.hs80control.App</id>
   <name>HS80 Control</name>
-  <summary>Control Corsair HS80 hardware and spatial audio</summary>
+  <summary>Control Corsair HS80 RGB Wireless through its supported receiver</summary>
+  <summary xml:lang="de">Corsair HS80 RGB Wireless über kompatiblen Empfänger steuern</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <developer id="io.github.hs80control">
@@ -13,7 +14,14 @@
   <description>
     <p>
       HS80 Control manages RGB zones, battery information, sleep timeout,
-      sidetone and microphone gain for the Corsair HS80 RGB Wireless headset.
+      sidetone and microphone gain for the Corsair HS80 RGB Wireless through
+      receiver USB ID 1b1c:0a6b.
+    </p>
+    <p>
+      Headset product ID 0a69 is hardware-tested. Product ID 0a71 is
+      experimental. HS80 MAX, HS80 RGB USB/wired, Xbox or Bluetooth variants,
+      receivers with other USB IDs and multiple simultaneous receivers are not
+      supported.
     </p>
     <p>
       It can also create a PipeWire 7.1 virtual sink and render it to stereo
@@ -24,6 +32,7 @@
   <provides>
     <binary>hs80-control</binary>
     <binary>hs80ctl</binary>
+    <modalias>usb:v1B1Cp0A6Bd*</modalias>
   </provides>
   <releases>
     <release version="0.1.1" date="2026-08-13">

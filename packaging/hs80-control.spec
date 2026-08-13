@@ -23,7 +23,7 @@ Requires:       python3 >= 3.11
 Requires:       python3-dbus-next
 Requires:       python3-gobject
 Requires:       gtk4
-Requires:       libadwaita
+Requires:       libadwaita >= 1.7
 Requires:       hidapi
 Requires:       alsa-utils
 Requires:       systemd

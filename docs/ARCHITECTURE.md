@@ -14,6 +14,19 @@ hs80ctl ──────┼─ D-Bus ─ hs80d ─ hidapi ─ /dev/hidraw (Int
 die durch `uaccess` freigegebene hidraw-Datei, die ALSA-Regler und die
 PipeWire-Sitzung zugreifen. Ein Root- oder Systemdienst ist nicht notwendig.
 
+## Geräteauswahl und Mehrgerätebetrieb
+
+Der Daemon sucht ausschließlich HID-Interface 3 des Receivers `1b1c:0a6b` und
+verwaltet pro Benutzersitzung genau einen Receiver. Sind mehrere passende
+Receiver angeschlossen, wird derzeit der erste nach hidraw-Gerätenamen
+sortierte Kontrollknoten verwendet; eine explizite Auswahl per Konfiguration,
+D-Bus, CLI oder Oberfläche existiert nicht.
+
+Soweit vorhanden, bindet die USB-Seriennummer die ALSA-Regler an den
+ausgewählten Receiver. Die Spatial-Konfiguration bricht bei mehreren passenden
+physischen HS80-Sinks bewusst ab. Für einen eindeutigen Betrieb sollte deshalb
+nur ein kompatibler Receiver angeschlossen sein.
+
 ## HID-Serialisierung
 
 Receiverkommandos, Headsetkommandos, RGB-Frames, Heartbeats und spontane
