@@ -1,6 +1,15 @@
 # HS80-Protokollnotizen
 
-Zielgerät: Corsair HS80 RGB Wireless Receiver `1b1c:0a6b`.
+## Geltungsbereich
+
+Bestätigte Zielhardware ist der Corsair HS80 RGB Wireless Receiver mit der
+USB-ID `1b1c:0a6b` und einem gekoppelten Headset mit interner Produkt-ID
+`0a69`. Die Produkt-ID `0a71` wird von der Implementierung akzeptiert, ist
+aber noch nicht an echter Hardware verifiziert und gilt daher als
+experimentell.
+
+Diese Protokollnotizen gelten nicht für HS80 MAX, HS80 RGB USB/Wired,
+Xbox- oder Bluetooth-Varianten oder für Receiver mit anderen USB-IDs.
 
 ## USB-Aufteilung
 
@@ -43,7 +52,8 @@ Geräteliste ermittelt und ist bei einem einzelnen Gerät üblicherweise `09`.
 3. Ressource `24` öffnen und gekoppelte Geräte lesen
 4. falls diese Legacy-Liste leer ist, aktive Funkkanäle über Eigenschaft `02 36`
    ermitteln und Vendor-/Produkt-ID mit `02 11`/`02 12` direkt abfragen
-5. ein Corsair-HS80 mit Produkt-ID `0a69` oder `0a71` auswählen
+5. ein Corsair-HS80 mit Produkt-ID `0a69` (bestätigt) oder `0a71`
+   (experimentell) auswählen
 6. Headset-Heartbeat `12`
 7. Headset-Firmware, Akku und Mikrofonstatus lesen
 8. Headset in Softwaremodus setzen und RGB-Endpunkt öffnen
