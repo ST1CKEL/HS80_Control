@@ -22,99 +22,27 @@ DBUS_CALL_TIMEOUT_MS = 30_000
 SPATIAL_DBUS_CALL_TIMEOUT_MS = 60_000
 
 _CSS = b"""
-.app-shell { background-color: #080d13; }
-.app-header {
-  background: linear-gradient(180deg, alpha(#1b222c, 0.98), alpha(#121821, 0.98));
-  border-bottom: 1px solid alpha(#8ba0b8, 0.12);
-  box-shadow: 0 4px 18px alpha(#000000, 0.22);
-}
-.app-title { font-size: 17px; font-weight: 750; letter-spacing: 0.08em; }
-.app-subtitle { color: alpha(#d9e2ee, 0.70); font-size: 0.86em; }
-.sidebar {
-  background: linear-gradient(145deg, #18212b, #101720);
-  border-right: 1px solid alpha(#90a7c0, 0.12);
-  padding: 18px 12px;
-}
-.sidebar-brand { color: alpha(#eaf5ff, 0.86); font-weight: 700; }
-.sidebar-device { color: alpha(#d6e1ec, 0.72); font-size: 0.82em; }
-.navigation-list { background: transparent; }
-.navigation-list > row {
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 13px;
-  margin: 3px 0;
-  padding: 0;
-}
-.navigation-list > row:hover { background: alpha(#ffffff, 0.045); }
-.navigation-list > row:selected {
-  background: linear-gradient(105deg, alpha(#00c8f2, 0.17), alpha(#6078ff, 0.10));
-  border-color: alpha(#26d8ff, 0.30);
-  box-shadow: inset 3px 0 #16c9f4;
-}
-.navigation-row { padding: 13px 12px; }
-.navigation-row image { color: alpha(#e5edf5, 0.80); }
-.navigation-list > row:selected .navigation-row image,
-.navigation-list > row:selected .navigation-row label { color: #36d7ff; }
-.content-background {
-  background: linear-gradient(145deg, #080d13, #0a1119 55%, #091019);
-}
-.dashboard-content { padding: 26px; }
-.hero-card {
-  background: linear-gradient(118deg, alpha(#0d1822, 0.98), alpha(#0b2635, 0.80) 52%, alpha(#251441, 0.72));
-  border: 1px solid alpha(#8ca4bc, 0.22);
-  border-radius: 22px;
-  padding: 30px;
-  box-shadow: 0 14px 32px alpha(#000000, 0.30);
-}
-.hero-title { font-size: 31px; font-weight: 850; letter-spacing: 0.04em; }
-.hero-kicker { color: #29d7ff; font-size: 0.82em; font-weight: 750; letter-spacing: 0.14em; }
-.hero-subtitle { color: alpha(#e7eef6, 0.80); }
-.battery-value { font-size: 33px; font-weight: 850; font-feature-settings: "tnum"; }
-.battery-caption { color: alpha(#d8e3ef, 0.72); font-size: 0.86em; }
-.battery-icon { color: #25d9d0; }
-.status-online { color: #42dd88; font-weight: 700; }
-.status-standby { color: #f2b84b; font-weight: 700; }
-.status-offline { color: #f07c82; font-weight: 700; }
-.section-title { font-size: 18px; font-weight: 800; }
-.status-card {
-  background: linear-gradient(135deg, alpha(#1a242f, 0.96), alpha(#111821, 0.96));
-  border: 1px solid alpha(#91a7bd, 0.18);
-  border-radius: 16px;
-  padding: 12px;
-  box-shadow: 0 8px 20px alpha(#000000, 0.18);
-}
-.status-card-icon {
-  color: #28d7ff;
-  background: alpha(#0b1720, 0.72);
-  border: 2px solid alpha(#27d7ff, 0.55);
+.connection-pill {
+  background-color: alpha(currentColor, 0.10);
   border-radius: 999px;
-  padding: 8px;
+  padding: 4px 12px;
+  font-weight: 700;
 }
-.status-card-icon-purple {
-  color: #a263ff;
-  border-color: alpha(#9b5cff, 0.60);
+.status-online { color: @success_color; }
+.status-standby { color: @warning_color; }
+.status-offline { color: @error_color; }
+.hero-box { padding: 24px; }
+.device-icon {
+  color: @accent_color;
+  background-color: alpha(@accent_bg_color, 0.12);
+  border-radius: 999px;
+  padding: 14px;
 }
-.status-card-title { color: alpha(#eff5fb, 0.94); font-weight: 700; }
-.status-card-value { font-size: 15px; font-weight: 800; }
-.status-card-detail { color: alpha(#dbe5ef, 0.72); }
-.quick-title { font-size: 17px; font-weight: 800; }
-.quick-card {
-  background: linear-gradient(110deg, alpha(#19232e, 0.96), alpha(#101720, 0.96));
-  border: 1px solid alpha(#91a7bd, 0.18);
-  border-radius: 16px;
-  padding: 20px 24px;
-}
-.gradient-action {
-  background: linear-gradient(100deg, #06bfe8, #337df5 52%, #812fe8);
-  color: white;
-  border: 0;
-  border-radius: 12px;
-  padding: 11px 24px;
-  font-weight: 800;
-  box-shadow: 0 6px 18px alpha(#326fea, 0.30);
-}
-.gradient-action:hover { background: linear-gradient(100deg, #21d2f7, #4b8dff 52%, #9349f2); }
-.settings-page { background-color: #0a1119; }
+.status-card { padding: 16px; }
+.status-card-icon { color: @accent_color; }
+.status-card-detail { opacity: 0.75; }
+.battery-value { font-size: 26px; font-weight: 800; font-feature-settings: "tnum"; }
+.battery-caption { opacity: 0.75; font-size: 0.86em; }
 .section-note { opacity: 0.80; font-size: 0.92em; }
 .color-chip { min-width: 54px; min-height: 32px; }
 """
@@ -153,118 +81,52 @@ class BatteryRing(Gtk.DrawingArea):
     def __init__(self) -> None:
         super().__init__()
         self.percent = -1
-        self.set_content_width(178)
-        self.set_content_height(178)
+        self.charging = False
+        self.set_content_width(160)
+        self.set_content_height(160)
         self.set_draw_func(self._draw)
 
-    def set_percent(self, percent: int) -> None:
+    def set_percent(self, percent: int, charging: bool = False) -> None:
         normalized = max(-1, min(100, percent))
-        if normalized != self.percent:
+        if normalized != self.percent or charging != self.charging:
             self.percent = normalized
+            self.charging = charging
             self.queue_draw()
+
+    def _ring_color(self) -> tuple[float, float, float]:
+        # Follow the active libadwaita theme: accent by default, semantic
+        # colors when the battery is low or charging.
+        name = "error_bg_color" if 0 <= self.percent < 20 else (
+            "success_bg_color" if self.charging else "accent_bg_color"
+        )
+        found, rgba = self.get_style_context().lookup_color(name)
+        if not found:
+            return (0.35, 0.45, 0.95)
+        return (rgba.red, rgba.green, rgba.blue)
 
     def _draw(self, _area: Gtk.DrawingArea, context: object, width: int, height: int) -> None:
         size = min(width, height)
         center_x = width / 2
         center_y = height / 2
-        radius = max(1.0, size / 2 - 10)
+        radius = max(1.0, size / 2 - 9)
         line_width = max(7.0, size * 0.055)
         start = -math.pi / 2
 
+        found, track = self.get_style_context().lookup_color("window_fg_color")
+        track_alpha = 0.15 if found else 0.5
         context.set_line_width(line_width)
         context.set_line_cap(1)
-        context.set_source_rgba(0.42, 0.50, 0.60, 0.18)
+        context.set_source_rgba(track.red, track.green, track.blue, track_alpha)
         context.arc(center_x, center_y, radius, 0, math.tau)
         context.stroke()
 
         if self.percent < 0:
             return
-        end = start + math.tau * self.percent / 100
-        context.set_line_width(line_width + 7)
-        context.set_source_rgba(0.10, 0.84, 0.98, 0.12)
+        end = start + math.tau * max(0.02, self.percent / 100)
+        red, green, blue = self._ring_color()
+        context.set_source_rgb(red, green, blue)
         context.arc(center_x, center_y, radius, start, end)
         context.stroke()
-        midpoint = min(end, start + math.pi)
-        context.set_line_width(line_width)
-        context.set_source_rgb(0.05, 0.81, 0.95)
-        context.arc(center_x, center_y, radius, start, midpoint)
-        context.stroke()
-        if end > midpoint:
-            context.set_source_rgb(0.56, 0.22, 0.96)
-            context.arc(center_x, center_y, radius, midpoint, end)
-            context.stroke()
-
-
-class HeadsetArt(Gtk.DrawingArea):
-    def __init__(self) -> None:
-        super().__init__()
-        self.set_content_width(260)
-        self.set_content_height(250)
-        self.set_hexpand(True)
-        self.set_vexpand(True)
-        self.set_tooltip_text("Stilisierte Darstellung des Corsair HS80")
-        self.set_draw_func(self._draw)
-
-    @staticmethod
-    def _rounded_rectangle(
-        context: object, x: float, y: float, width: float, height: float, radius: float
-    ) -> None:
-        radius = min(radius, width / 2, height / 2)
-        context.new_sub_path()
-        context.arc(x + width - radius, y + radius, radius, -math.pi / 2, 0)
-        context.arc(x + width - radius, y + height - radius, radius, 0, math.pi / 2)
-        context.arc(x + radius, y + height - radius, radius, math.pi / 2, math.pi)
-        context.arc(x + radius, y + radius, radius, math.pi, 3 * math.pi / 2)
-        context.close_path()
-
-    def _draw(self, _area: Gtk.DrawingArea, context: object, width: int, height: int) -> None:
-        scale = min(width / 300, height / 260)
-        context.translate((width - 300 * scale) / 2, (height - 260 * scale) / 2)
-        context.scale(scale, scale)
-        context.set_line_cap(1)
-        context.set_line_join(1)
-
-        for line_width, alpha in ((18, 0.05), (10, 0.10), (4, 0.85)):
-            context.set_line_width(line_width)
-            context.set_source_rgba(0.10, 0.84, 0.98, alpha)
-            context.arc(150, 115, 84, math.pi * 1.04, math.pi * 1.96)
-            context.stroke()
-        context.set_line_width(18)
-        context.set_source_rgba(0.09, 0.11, 0.14, 1)
-        context.arc(150, 116, 82, math.pi * 1.04, math.pi * 1.96)
-        context.stroke()
-        context.set_line_width(6)
-        context.set_source_rgba(0.22, 0.27, 0.32, 1)
-        context.arc(150, 116, 82, math.pi * 1.04, math.pi * 1.96)
-        context.stroke()
-
-        for x, edge in ((63, (0.10, 0.86, 0.97)), (191, (0.61, 0.27, 0.97))):
-            context.set_source_rgba(edge[0], edge[1], edge[2], 0.16)
-            self._rounded_rectangle(context, x - 7, 97, 60, 124, 27)
-            context.fill()
-            context.set_source_rgba(0.06, 0.08, 0.11, 1)
-            self._rounded_rectangle(context, x, 104, 46, 110, 23)
-            context.fill_preserve()
-            context.set_line_width(3)
-            context.set_source_rgb(*edge)
-            context.stroke()
-            context.set_source_rgba(0.12, 0.15, 0.18, 1)
-            self._rounded_rectangle(context, x + 8, 121, 30, 77, 15)
-            context.fill()
-
-        context.set_line_width(7)
-        context.set_source_rgba(0.15, 0.18, 0.21, 1)
-        context.move_to(88, 190)
-        context.curve_to(74, 225, 95, 237, 137, 237)
-        context.stroke()
-        context.set_line_width(4)
-        context.set_source_rgba(0.12, 0.82, 0.96, 0.95)
-        context.move_to(87, 188)
-        context.curve_to(75, 222, 98, 232, 137, 232)
-        context.stroke()
-        context.arc(142, 232, 6, 0, math.tau)
-        context.set_source_rgba(0.66, 0.31, 0.98, 1)
-        context.fill()
 
 
 def _lighting_mute_hint(microphone: int) -> str:
@@ -296,8 +158,8 @@ def _hex_color(color: Gdk.RGBA) -> str:
 class HS80Window(Adw.ApplicationWindow):
     def __init__(self, application: Adw.Application) -> None:
         super().__init__(application=application, title="HS80 Control")
-        self.set_default_size(1280, 820)
-        self.set_size_request(680, 560)
+        self.set_default_size(960, 700)
+        self.set_size_request(420, 540)
         self.config = ConfigStore()
         self.proxy: Gio.DBusProxy | None = None
         self._syncing = False
@@ -313,41 +175,36 @@ class HS80Window(Adw.ApplicationWindow):
         )
 
         toolbar = Adw.ToolbarView()
-        toolbar.add_css_class("app-shell")
-        header = Adw.HeaderBar()
-        header.add_css_class("app-header")
-        self.sidebar_button = Gtk.Button.new_from_icon_name("sidebar-show-symbolic")
-        self.sidebar_button.set_tooltip_text("Navigation öffnen")
-        self.sidebar_button.set_visible(False)
-        self.sidebar_button.connect("clicked", self._toggle_sidebar)
-        header.pack_start(self.sidebar_button)
+        self.header = Adw.HeaderBar()
+        self.window_title = Adw.WindowTitle(
+            title="HS80 Control", subtitle="Corsair HS80 RGB Wireless"
+        )
 
-        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        title = Gtk.Label(label="HS80 CONTROL")
-        title.add_css_class("app-title")
-        subtitle = Gtk.Label(label="Fedora · PipeWire")
-        subtitle.add_css_class("app-subtitle")
-        title_box.append(title)
-        title_box.append(subtitle)
-        header.set_title_widget(title_box)
-
-        self.stack = Adw.ViewStack()
-        self.stack.add_css_class("content-background")
-        self.stack.set_enable_transitions(True)
-        self.stack.set_transition_duration(180)
         self.refresh_button = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
         self.refresh_button.set_tooltip_text("Status aktualisieren")
         self.refresh_button.connect("clicked", self._refresh)
-        header.pack_end(self.refresh_button)
-        toolbar.add_top_bar(header)
+        self.header.pack_end(self.refresh_button)
 
-        self.split_view = Adw.OverlaySplitView()
-        self.split_view.set_sidebar_width_fraction(0.20)
-        self.split_view.set_min_sidebar_width(220)
-        self.split_view.set_max_sidebar_width(248)
-        self.split_view.set_sidebar(self._build_sidebar())
-        self.split_view.set_content(self.stack)
-        self.toast_overlay = Adw.ToastOverlay(child=self.split_view)
+        about_action = Gio.SimpleAction.new("about", None)
+        about_action.connect("activate", self._show_about)
+        self.add_action(about_action)
+        menu = Gio.Menu()
+        menu.append("Über HS80 Control", "win.about")
+        menu_button = Gtk.MenuButton(
+            icon_name="open-menu-symbolic", menu_model=menu, primary=True
+        )
+        menu_button.set_tooltip_text("Hauptmenü")
+        self.header.pack_end(menu_button)
+
+        self.stack = Adw.ViewStack()
+        self.switcher = Adw.ViewSwitcher(
+            stack=self.stack, policy=Adw.ViewSwitcherPolicy.WIDE
+        )
+        self.header.set_title_widget(self.switcher)
+        self.switcher_bar = Adw.ViewSwitcherBar(stack=self.stack)
+        toolbar.add_top_bar(self.header)
+        toolbar.add_bottom_bar(self.switcher_bar)
+        self.toast_overlay = Adw.ToastOverlay(child=self.stack)
         toolbar.set_content(self.toast_overlay)
         self.set_content(toolbar)
 
@@ -356,103 +213,18 @@ class HS80Window(Adw.ApplicationWindow):
         self._build_microphone_page()
         self._build_spatial_page()
         self._install_breakpoints()
-        first_row = self.navigation.get_row_at_index(0)
-        if first_row is not None:
-            self.navigation.select_row(first_row)
         self._connect_dbus()
         GLib.timeout_add_seconds(2, self._poll)
 
-    def _build_sidebar(self) -> Gtk.Widget:
-        scroll = Gtk.ScrolledWindow()
-        scroll.add_css_class("sidebar")
-        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
-
-        brand = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        brand.set_margin_start(12)
-        brand.set_margin_end(12)
-        brand.set_margin_bottom(2)
-        brand_title = Gtk.Label(label="HS80 RGB WIRELESS", xalign=0)
-        brand_title.add_css_class("sidebar-brand")
-        brand_device = Gtk.Label(label="Receiver 1b1c:0a6b", xalign=0)
-        brand_device.add_css_class("sidebar-device")
-        brand.append(brand_title)
-        brand.append(brand_device)
-        sidebar.append(brand)
-
-        self.navigation = Gtk.ListBox()
-        self.navigation.add_css_class("navigation-list")
-        self.navigation.set_selection_mode(Gtk.SelectionMode.SINGLE)
-        self.navigation.set_activate_on_single_click(True)
-        for page, label, icon_name in (
-            ("overview", "Übersicht", "go-home-symbolic"),
-            ("lighting", "RGB", "preferences-color-symbolic"),
-            ("microphone", "Mikrofon", "audio-input-microphone-symbolic"),
-            ("spatial", "Spatial", "audio-speakers-symbolic"),
-        ):
-            row = Gtk.ListBoxRow()
-            row.page_name = page
-            content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
-            content.add_css_class("navigation-row")
-            icon = Gtk.Image.new_from_icon_name(icon_name)
-            icon.set_pixel_size(22)
-            content.append(icon)
-            text = Gtk.Label(label=label, xalign=0)
-            text.set_hexpand(True)
-            content.append(text)
-            row.set_child(content)
-            self.navigation.append(row)
-        self.navigation.connect("row-selected", self._navigation_selected)
-        sidebar.append(self.navigation)
-
-        spacer = Gtk.Box()
-        spacer.set_vexpand(True)
-        sidebar.append(spacer)
-        sidebar.append(Gtk.Separator())
-        about = Gtk.Button()
-        about_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        about_content.append(Gtk.Image.new_from_icon_name("help-about-symbolic"))
-        about_content.append(Gtk.Label(label=f"Über HS80 Control · {__version__}"))
-        about.set_child(about_content)
-        about.add_css_class("flat")
-        about.set_halign(Gtk.Align.FILL)
-        about.connect("clicked", self._show_about)
-        sidebar.append(about)
-        scroll.set_child(sidebar)
-        return scroll
-
     def _install_breakpoints(self) -> None:
-        collapsed = Adw.Breakpoint.new(
-            Adw.BreakpointCondition.parse("max-width: 900sp")
-        )
-        collapsed.add_setter(self.split_view, "collapsed", True)
-        collapsed.add_setter(self.sidebar_button, "visible", True)
-        collapsed.add_setter(self.hero_art, "visible", False)
-        self.add_breakpoint(collapsed)
-
         narrow = Adw.Breakpoint.new(
-            Adw.BreakpointCondition.parse("max-width: 700sp")
+            Adw.BreakpointCondition.parse("max-width: 600sp")
         )
-        narrow.add_setter(self.split_view, "collapsed", True)
-        narrow.add_setter(self.sidebar_button, "visible", True)
-        narrow.add_setter(self.hero_art, "visible", False)
-        narrow.add_setter(self.quick_action, "orientation", Gtk.Orientation.VERTICAL)
-        narrow.add_setter(self.quick_button, "halign", Gtk.Align.FILL)
+        narrow.add_setter(self.switcher_bar, "revealed", True)
+        narrow.add_setter(self.header, "title-widget", self.window_title)
         self.add_breakpoint(narrow)
 
-    def _toggle_sidebar(self, _button: Gtk.Button) -> None:
-        self.split_view.set_show_sidebar(not self.split_view.get_show_sidebar())
-
-    def _navigation_selected(
-        self, _list_box: Gtk.ListBox, row: Gtk.ListBoxRow | None
-    ) -> None:
-        if row is None:
-            return
-        self.stack.set_visible_child_name(row.page_name)
-        if self.split_view.get_collapsed():
-            self.split_view.set_show_sidebar(False)
-
-    def _show_about(self, _button: Gtk.Button) -> None:
+    def _show_about(self, *_args: object) -> None:
         dialog = Adw.AboutDialog(
             application_name="HS80 Control",
             application_icon=APP_ID,
@@ -471,21 +243,21 @@ class HS80Window(Adw.ApplicationWindow):
     @staticmethod
     def _section_title(text: str) -> Gtk.Label:
         label = Gtk.Label(label=text, xalign=0)
-        label.add_css_class("section-title")
+        label.add_css_class("title-4")
+        label.set_margin_top(6)
         return label
 
     @staticmethod
     def _status_card(
         icon_name: str, title: str, purple: bool = False
     ) -> tuple[Gtk.Box, Gtk.Label, Gtk.Label, Gtk.Box]:
-        card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        del purple  # Adw cards use one accent color for every icon
+        card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        card.add_css_class("card")
         card.add_css_class("status-card")
-        card.set_size_request(180, 112)
         icon = Gtk.Image.new_from_icon_name(icon_name)
-        icon.set_pixel_size(27)
+        icon.set_pixel_size(24)
         icon.add_css_class("status-card-icon")
-        if purple:
-            icon.add_css_class("status-card-icon-purple")
         icon.set_valign(Gtk.Align.CENTER)
         card.append(icon)
 
@@ -493,13 +265,14 @@ class HS80Window(Adw.ApplicationWindow):
         text_box.set_hexpand(True)
         text_box.set_valign(Gtk.Align.CENTER)
         heading = Gtk.Label(label=title, xalign=0)
-        heading.add_css_class("status-card-title")
+        heading.add_css_class("caption-heading")
         value = Gtk.Label(label="--", xalign=0)
-        value.add_css_class("status-card-value")
+        value.add_css_class("heading")
         value.set_ellipsize(3)
         value.set_max_width_chars(17)
         detail = Gtk.Label(label="", xalign=0)
         detail.add_css_class("status-card-detail")
+        detail.add_css_class("dim-label")
         detail.set_ellipsize(3)
         for label in (heading, detail):
             label.set_max_width_chars(15)
@@ -511,41 +284,50 @@ class HS80Window(Adw.ApplicationWindow):
 
     def _build_overview_page(self) -> None:
         page = Gtk.ScrolledWindow()
-        page.add_css_class("content-background")
         page.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        clamp = Adw.Clamp(maximum_size=1400, tightening_threshold=1100)
+        clamp = Adw.Clamp(maximum_size=700, tightening_threshold=560)
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
-        content.add_css_class("dashboard-content")
+        content.set_margin_top(18)
+        content.set_margin_bottom(24)
+        content.set_margin_start(18)
+        content.set_margin_end(18)
         clamp.set_child(content)
         page.set_child(clamp)
 
         self.hero = Adw.WrapBox()
         self.hero.set_child_spacing(24)
         self.hero.set_line_spacing(18)
-        self.hero.set_natural_line_length(900)
-        self.hero.add_css_class("hero-card")
+        self.hero.set_natural_line_length(520)
+        self.hero.add_css_class("card")
+        self.hero.add_css_class("hero-box")
         self.hero.set_hexpand(True)
 
-        self.hero_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=7)
+        identity = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        device_icon = Gtk.Image.new_from_icon_name("audio-headset-symbolic")
+        device_icon.set_pixel_size(36)
+        device_icon.add_css_class("device-icon")
+        device_icon.set_valign(Gtk.Align.CENTER)
+        identity.append(device_icon)
+
+        self.hero_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.hero_text.set_hexpand(True)
         self.hero_text.set_valign(Gtk.Align.CENTER)
-        kicker = Gtk.Label(label="SUPPORTED RECEIVER · 1B1C:0A6B", xalign=0)
-        kicker.add_css_class("hero-kicker")
-        product = Gtk.Label(label="CORSAIR HS80\nRGB WIRELESS", xalign=0)
+        product = Gtk.Label(label="Corsair HS80 RGB Wireless", xalign=0)
         product.set_wrap(True)
-        product.add_css_class("hero-title")
+        product.add_css_class("title-3")
+        receiver_note = Gtk.Label(label="Receiver 1b1c:0a6b", xalign=0)
+        receiver_note.add_css_class("dim-label")
         self.connection_label = Gtk.Label(label="Dienst wird verbunden ...", xalign=0)
-        self.connection_label.add_css_class("hero-subtitle")
-        self.hero_text.append(kicker)
+        self.connection_label.add_css_class("connection-pill")
+        self.connection_label.set_halign(Gtk.Align.START)
         self.hero_text.append(product)
+        self.hero_text.append(receiver_note)
         self.hero_text.append(self.connection_label)
-        self.hero.append(self.hero_text)
-
-        self.hero_art = HeadsetArt()
-        self.hero.append(self.hero_art)
+        identity.append(self.hero_text)
+        self.hero.append(identity)
 
         battery_overlay = Gtk.Overlay()
-        battery_overlay.set_size_request(180, 180)
+        battery_overlay.set_size_request(160, 160)
         battery_overlay.set_halign(Gtk.Align.CENTER)
         battery_overlay.set_valign(Gtk.Align.CENTER)
         self.battery_ring = BatteryRing()
@@ -557,12 +339,8 @@ class HS80Window(Adw.ApplicationWindow):
         self.battery_label.add_css_class("battery-value")
         self.battery_caption = Gtk.Label(label="AKKU")
         self.battery_caption.add_css_class("battery-caption")
-        battery_icon = Gtk.Image.new_from_icon_name("battery-good-symbolic")
-        battery_icon.set_pixel_size(24)
-        battery_icon.add_css_class("battery-icon")
         battery_text.append(self.battery_label)
         battery_text.append(self.battery_caption)
-        battery_text.append(battery_icon)
         battery_overlay.add_overlay(battery_text)
         self.hero.append(battery_overlay)
         content.append(self.hero)
@@ -583,8 +361,8 @@ class HS80Window(Adw.ApplicationWindow):
         status.set_activate_on_single_click(False)
         status.set_homogeneous(True)
         status.set_min_children_per_line(1)
-        status.set_max_children_per_line(4)
-        status.set_column_spacing(8)
+        status.set_max_children_per_line(2)
+        status.set_column_spacing(12)
         status.set_row_spacing(12)
 
         battery_card, self.battery_card_value, self.battery_card_detail, battery_box = (
@@ -597,7 +375,7 @@ class HS80Window(Adw.ApplicationWindow):
         status.append(battery_card)
 
         mic_card, self.mic_card_value, self.mic_card_detail, _ = self._status_card(
-            "audio-input-microphone-symbolic", "Mikrofonarm", True
+            "audio-input-microphone-symbolic", "Mikrofonarm"
         )
         status.append(mic_card)
         firmware_card, self.firmware_card_value, self.firmware_card_detail, _ = (
@@ -605,36 +383,33 @@ class HS80Window(Adw.ApplicationWindow):
         )
         status.append(firmware_card)
         receiver_card, self.receiver_card_value, self.receiver_card_detail, _ = (
-            self._status_card("network-server-symbolic", "Receiver", True)
+            self._status_card("network-server-symbolic", "Receiver")
         )
         status.append(receiver_card)
         content.append(status)
 
         content.append(self._section_title("Schnellaktionen"))
-        self.quick_action = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18)
-        self.quick_action.add_css_class("quick-card")
-        quick_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        quick_text.set_hexpand(True)
-        quick_title = Gtk.Label(label="Beleuchtung ausschalten", xalign=0)
-        quick_title.add_css_class("quick-title")
-        quick_detail = Gtk.Label(
-            label="Reduziert den Akkuverbrauch des Headsets", xalign=0
+        self.quick_action = Gtk.ListBox()
+        self.quick_action.add_css_class("boxed-list")
+        self.quick_action.set_selection_mode(Gtk.SelectionMode.NONE)
+        quick_row = Adw.ActionRow(
+            title="Beleuchtung ausschalten",
+            subtitle="Reduziert den Akkuverbrauch des Headsets",
         )
-        quick_detail.add_css_class("status-card-detail")
-        quick_text.append(quick_title)
-        quick_text.append(quick_detail)
-        self.quick_action.append(quick_text)
         self.quick_button = Gtk.Button(label="RGB ausschalten")
         self.quick_button.set_valign(Gtk.Align.CENTER)
-        self.quick_button.add_css_class("gradient-action")
+        self.quick_button.add_css_class("suggested-action")
         self.quick_button.connect("clicked", self._quick_rgb_off)
-        self.quick_action.append(self.quick_button)
+        quick_row.add_suffix(self.quick_button)
+        quick_row.set_activatable_widget(self.quick_button)
+        self.quick_action.append(quick_row)
         content.append(self.quick_action)
-        self.stack.add_titled(page, "overview", "Übersicht").set_icon_name("view-dashboard-symbolic")
+        self.stack.add_titled(page, "overview", "Übersicht").set_icon_name(
+            "view-dashboard-symbolic"
+        )
 
     def _build_lighting_page(self) -> None:
         page = Adw.PreferencesPage()
-        page.add_css_class("settings-page")
         settings = self.config.snapshot()["rgb"]
 
         group = Adw.PreferencesGroup(
@@ -734,7 +509,6 @@ class HS80Window(Adw.ApplicationWindow):
 
     def _build_microphone_page(self) -> None:
         page = Adw.PreferencesPage()
-        page.add_css_class("settings-page")
         monitoring = Adw.PreferencesGroup(
             title="Hardware-Sidetone",
             description="Direktes Mikrofon-Monitoring ohne PipeWire-Latenz.",
@@ -806,7 +580,6 @@ class HS80Window(Adw.ApplicationWindow):
 
     def _build_spatial_page(self) -> None:
         page = Adw.PreferencesPage()
-        page.add_css_class("settings-page")
         group = Adw.PreferencesGroup(
             title="Binaurales 7.1",
             description=(
@@ -937,7 +710,7 @@ class HS80Window(Adw.ApplicationWindow):
             self.battery_caption.set_label("LETZTER STAND")
         else:
             self.battery_caption.set_label("LÄDT" if charging == 1 else "AKKU")
-        self.battery_ring.set_percent(battery)
+        self.battery_ring.set_percent(battery, charging == 1)
         self.battery_progress.set_fraction(max(0, battery) / 100 if battery >= 0 else 0)
         self.battery_card_value.set_label(battery_text)
         self.battery_card_detail.set_label(battery_detail)
@@ -1288,9 +1061,6 @@ class HS80Application(Adw.Application):
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
 
     def do_activate(self) -> None:
-        Adw.StyleManager.get_default().set_color_scheme(
-            Adw.ColorScheme.FORCE_DARK
-        )
         window = self.get_active_window()
         if window is None:
             window = HS80Window(self)
