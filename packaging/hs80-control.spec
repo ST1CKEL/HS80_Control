@@ -1,5 +1,5 @@
 Name:           hs80-control
-Version:        0.1.2
+Version:        0.1.3
 Release:        1%{?dist}
 Summary:        Corsair HS80 RGB Wireless control service
 License:        GPL-3.0-or-later AND CC0-1.0
@@ -79,6 +79,9 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 %{_datadir}/icons/hicolor/scalable/apps/io.github.hs80control.App.svg
 
 %changelog
+* Sat Aug 15 2026 ST1CKEL - 0.1.3-1
+- Show a banner and toast when muted microphone suppresses lighting
+- Document firmware lighting suppression while the mic arm is up
 * Thu Aug 13 2026 ST1CKEL - 0.1.2-1
 - Fix RGB apply in the GTK interface on Fedora
 - Restore controls when an RGB profile cannot be serialized

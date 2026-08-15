@@ -75,6 +75,13 @@ class GuiPresentationTests(unittest.TestCase):
     def test_gtk_rgba_is_serialized_for_rgb_dbus_calls(self) -> None:
         self.assertEqual("#12abef", self.gui._hex_color(self.gui._rgba("#12abef")))
 
+    def test_lighting_mute_hint_appears_only_while_muted(self) -> None:
+        self.assertEqual("", self.gui._lighting_mute_hint(0))
+        self.assertEqual("", self.gui._lighting_mute_hint(-1))
+        hint = self.gui._lighting_mute_hint(1)
+        self.assertIn("hochgeklappt", hint)
+        self.assertIn("Runterklappen", hint)
+
     def test_rgb_dbus_parameters_use_real_gtk_colors(self) -> None:
         page = SimpleNamespace(
             rgb_brightness=SimpleNamespace(get_value=lambda: 42),

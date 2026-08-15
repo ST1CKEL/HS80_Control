@@ -267,6 +267,17 @@ class HeadsetArt(Gtk.DrawingArea):
         context.fill()
 
 
+def _lighting_mute_hint(microphone: int) -> str:
+    # The HS80 firmware suppresses software lighting entirely while the
+    # microphone arm is flipped up (muted); verified on firmware 5.8.48.
+    if microphone == 1:
+        return (
+            "Mikrofon ist hochgeklappt (stumm) – "
+            "Beleuchtung erscheint erst nach dem Runterklappen"
+        )
+    return ""
+
+
 def _rgba(value: str) -> Gdk.RGBA:
     color = Gdk.RGBA()
     if not color.parse(value):
@@ -692,7 +703,13 @@ class HS80Window(Adw.ApplicationWindow):
         apply_row.set_activatable_widget(apply)
         actions.add(apply_row)
         page.add(actions)
-        self.stack.add_titled(page, "lighting", "RGB").set_icon_name("preferences-color-symbolic")
+        self.lighting_mute_banner = Adw.Banner(revealed=False)
+        lighting_wrapper = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        lighting_wrapper.append(self.lighting_mute_banner)
+        page.set_hexpand(True)
+        page.set_vexpand(True)
+        lighting_wrapper.append(page)
+        self.stack.add_titled(lighting_wrapper, "lighting", "RGB").set_icon_name("preferences-color-symbolic")
 
     def _color_row(
         self,
@@ -929,6 +946,9 @@ class HS80Window(Adw.ApplicationWindow):
         )
         self.mic_card_value.set_label(microphone_text)
         self.mic_card_detail.set_label(microphone_detail)
+        mute_hint = _lighting_mute_hint(microphone if headset else -1)
+        self.lighting_mute_banner.set_title(mute_hint)
+        self.lighting_mute_banner.set_revealed(bool(mute_hint))
         self.firmware_card_value.set_label(firmware or "--")
         self.firmware_card_detail.set_label(
             "Gerätefirmware" if firmware else "Noch nicht initialisiert"
@@ -1129,7 +1149,15 @@ class HS80Window(Adw.ApplicationWindow):
             self._lighting_apply_pending = False
             if success:
                 self._lighting_dirty.clear()
-                self._show_apply_result(applied)
+                mute_hint = _lighting_mute_hint(
+                    int(self._property("MicrophoneMuted", -1))
+                )
+                if mute_hint:
+                    self.toast_overlay.add_toast(
+                        Adw.Toast(title=f"Profil gespeichert – {mute_hint}", timeout=6)
+                    )
+                else:
+                    self._show_apply_result(applied)
             self._sync_state()
 
         def after_rgb(success: bool, rgb_applied: bool) -> None:
