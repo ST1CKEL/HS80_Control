@@ -5,6 +5,38 @@ USB-Empfänger `1b1c:0a6b`. Das Projekt besteht aus einem Benutzerdienst, einer
 D-Bus-API, einem Kommandozeilenprogramm und einer GTK4/libadwaita-Oberfläche,
 die unter KDE Plasma und Wayland läuft.
 
+## Screenshots
+
+Die Oberfläche folgt den Systemfarben für hell und dunkel; die Aufnahmen
+entstehen unter KDE Plasma mit dunklem Schema.
+
+| Übersicht | RGB |
+| --- | --- |
+| ![Übersicht mit Statuskarten und Akkuring](docs/screenshots/overview.png) | ![RGB-Seite mit Farben und Modi](docs/screenshots/lighting.png) |
+
+| Mikrofon | Spatial |
+| --- | --- |
+| ![Mikrofonseite mit Sidetone und Gain](docs/screenshots/microphone.png) | ![Spatial-Seite mit binauralem 7.1](docs/screenshots/spatial.png) |
+
+## Systemanforderungen
+
+| Komponente | Anforderung |
+| --- | --- |
+| Hardware | Corsair HS80 RGB Wireless mit Receiver `1b1c:0a6b` (interne Headset-PID `0a69` bestätigt, `0a71` experimentell) |
+| Betriebssystem | Linux mit systemd-Benutzersitzung; entwickelt und getestet auf Fedora 44 |
+| Python | 3.11 oder neuer |
+| Grafik | GTK 4 und libadwaita ≥ 1.7 (Fedora 44 liefert 1.9); Wayland und X11 |
+| Audio | PipeWire mit WirePlumber (Spatial Audio zusätzlich `pipewire-module-filter-chain-sofa`) |
+| HID-Zugriff | `hidapi` (hidraw-Backend) plus die mitgelieferte udev-Regel für Interface 3 |
+| mixer | `alsa-utils` für Sidetone, Mikrofon-Gain und Aufnahmestummschaltung |
+| Optional | EasyEffects für RNNoise, Gate und Kompressor |
+
+Die Benutzeroberfläche reagiert adaptiv: ab einer Fensterbreite von 600 sp
+wechselt der Umschalter in der Kopfzeile auf eine Leiste am unteren Rand.
+libadwaita 1.9 hat die Eigenschaft `revealed` von `AdwViewSwitcherBar` zu
+`reveal` umbenannt; der Code unterstützt beide Namen und läuft deshalb mit
+libadwaita 1.7 bis 1.9+.
+
 ## Hardware-Kompatibilität
 
 HS80 Control unterstützt gezielt die folgende Hardware und nicht pauschal die
@@ -68,9 +100,6 @@ sudo dnf install python3 python3-dbus-next python3-gobject gtk4 libadwaita \
   hidapi alsa-utils pipewire pipewire-utils wireplumber
 ```
 
-Die neue adaptive Oberfläche benötigt libadwaita 1.7 oder neuer; Fedora 44
-erfüllt diese Voraussetzung.
-
 Für Spatial Audio zusätzlich:
 
 ```bash
@@ -79,6 +108,29 @@ sudo dnf install pipewire-module-filter-chain-sofa
 
 EasyEffects ist optional und wird für RNNoise, Gate und Kompressor des
 Mikrofons empfohlen.
+
+## Oberfläche
+
+Die GTK-Anwendung `hs80-control` gliedert sich in vier Seiten, die über den
+Umschalter in der Kopfzeile erreichbar sind:
+
+- **Übersicht** — Verbindungszustand als farbige Plakette, Akkuring mit
+  Prozentanzeige (unter 20 % rot, beim Laden grün), Statuskarten für Akku,
+  Mikrofonarm, Headset- und Receiver-Firmware sowie die Schnellaktion zum
+  Ausschalten der Beleuchtung. Fehler des Dienstes, der Audio-Infrastruktur
+  oder von Spatial Audio erscheinen als eigene Banner.
+- **RGB** — Modus (Aus, Statisch, Pulsieren, Regenbogen), Helligkeit,
+  getrennte Farben für Logo, Statusanzeige und Mikrofon-LED sowie der
+  Sleep-Timer. Ist der Mikrofonarm hochgeklappt, zeigt ein Banner, dass die
+  Firmware Software-Beleuchtung in diesem Zustand unterdrückt; das Profil
+  wird beim Herunterklappen automatisch angewendet.
+- **Mikrofon** — Hardware-Sidetone mit Regler, Mikrofon-Gain,
+  Aufnahmestummschaltung und der Sprung zu EasyEffects.
+- **Spatial** — binaurales 7.1 mit SOFA-HRTF, Standardausgabe-Wahl und
+  Wiedergabehinweisen.
+
+Statusmeldungen nach dem Anwenden erscheinen als Kurzmitteilungen (Toasts).
+Das Menü in der Kopfzeile öffnet den Dialog »Über HS80 Control«.
 
 ## Prüfen
 

@@ -113,10 +113,13 @@ class BatteryRing(Gtk.DrawingArea):
         start = -math.pi / 2
 
         found, track = self.get_style_context().lookup_color("window_fg_color")
-        track_alpha = 0.15 if found else 0.5
+        if found and track is not None:
+            track_rgba = (track.red, track.green, track.blue, 0.15)
+        else:
+            track_rgba = (0.5, 0.5, 0.5, 0.5)
         context.set_line_width(line_width)
         context.set_line_cap(1)
-        context.set_source_rgba(track.red, track.green, track.blue, track_alpha)
+        context.set_source_rgba(*track_rgba)
         context.arc(center_x, center_y, radius, 0, math.tau)
         context.stroke()
 
@@ -220,7 +223,14 @@ class HS80Window(Adw.ApplicationWindow):
         narrow = Adw.Breakpoint.new(
             Adw.BreakpointCondition.parse("max-width: 600sp")
         )
-        narrow.add_setter(self.switcher_bar, "revealed", True)
+        # libadwaita 1.9 renamed ViewSwitcherBar:revealed to :reveal; keep
+        # both names working so the package stays portable across versions.
+        reveal_property = (
+            "reveal"
+            if self.switcher_bar.find_property("reveal") is not None
+            else "revealed"
+        )
+        narrow.add_setter(self.switcher_bar, reveal_property, True)
         narrow.add_setter(self.header, "title-widget", self.window_title)
         self.add_breakpoint(narrow)
 
@@ -249,9 +259,8 @@ class HS80Window(Adw.ApplicationWindow):
 
     @staticmethod
     def _status_card(
-        icon_name: str, title: str, purple: bool = False
+        icon_name: str, title: str
     ) -> tuple[Gtk.Box, Gtk.Label, Gtk.Label, Gtk.Box]:
-        del purple  # Adw cards use one accent color for every icon
         card = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         card.add_css_class("card")
         card.add_css_class("status-card")
