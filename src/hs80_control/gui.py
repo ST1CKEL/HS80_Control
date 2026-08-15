@@ -276,9 +276,9 @@ def _rgba(value: str) -> Gdk.RGBA:
 
 def _hex_color(color: Gdk.RGBA) -> str:
     return "#{:02x}{:02x}{:02x}".format(
-        round(color.get_red() * 255),
-        round(color.get_green() * 255),
-        round(color.get_blue() * 255),
+        round(color.red * 255),
+        round(color.green * 255),
+        round(color.blue * 255),
     )
 
 
@@ -1108,10 +1108,22 @@ class HS80Window(Adw.ApplicationWindow):
     def _apply_lighting(self, _button: Gtk.Button | None) -> None:
         if self._lighting_apply_pending:
             return
+        modes = ["off", "static", "pulse", "rainbow"]
+        try:
+            mode = modes[self.rgb_mode.get_selected()]
+            rgb_parameters = self._rgb_parameters(mode)
+            sleep_minutes = round(self.sleep_spin.get_value())
+        except (AttributeError, IndexError, TypeError, ValueError) as exc:
+            self.toast_overlay.add_toast(
+                Adw.Toast(
+                    title=f"Beleuchtungsprofil konnte nicht gelesen werden: {exc}",
+                    timeout=5,
+                )
+            )
+            return
+
         self._lighting_apply_pending = True
         self._set_lighting_controls_sensitive(False)
-        modes = ["off", "static", "pulse", "rainbow"]
-        mode = modes[self.rgb_mode.get_selected()]
 
         def finish(success: bool, applied: bool = False) -> None:
             self._lighting_apply_pending = False
@@ -1130,12 +1142,12 @@ class HS80Window(Adw.ApplicationWindow):
 
             self._call(
                 "SetSleepTimer",
-                GLib.Variant("(q)", (round(self.sleep_spin.get_value()),)),
+                GLib.Variant("(q)", (sleep_minutes,)),
                 after_sleep,
                 show_result=False,
             )
 
-        self._call("SetRgb", self._rgb_parameters(mode), after_rgb, show_result=False)
+        self._call("SetRgb", rgb_parameters, after_rgb, show_result=False)
 
     def _apply_microphone(self, _button: Gtk.Button) -> None:
         if self._microphone_apply_pending:
