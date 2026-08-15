@@ -98,6 +98,16 @@ Vor den Daten stehen Länge als Little Endian und zwei reservierte Nullbytes:
 Bei physisch hochgeklapptem Mikrofon wird die Mikrofonzone rot dargestellt,
 sofern der Mute-Indikator aktiviert ist.
 
+### Stumm-Suppression der Firmware
+
+Bei Firmware 5.8.48 (bestätigt) unterdrückt das Headset die komplette
+Software-Beleuchtung, solange der Mikrofonarm hochgeklappt (stumm) ist.
+Farbwrites werden dann zwar mit Status `00` bestätigt, haben aber keine
+sichtbare Wirkung; der Mute-Indikator kann in diesem Zustand ebenfalls nicht
+erscheinen. Der Daemon wendet das gespeicherte Profil daher über das
+Mikrofon-Ereignis (`0x8e`/`0xa6`) erneut an, sobald der Arm heruntergeklappt
+wird.
+
 ## Statuswerte
 
 - Antworten verwenden `01 <TT-08> <erstes Kommandobyte> <Status> <Payload...>`.

@@ -35,6 +35,11 @@
     <modalias>usb:v1B1Cp0A6Bd*</modalias>
   </provides>
   <releases>
+    <release version="0.1.3" date="2026-08-15">
+      <description>
+        <p>Explain muted-microphone lighting suppression and re-apply profiles on unmute.</p>
+      </description>
+    </release>
     <release version="0.1.2" date="2026-08-13">
       <description>
         <p>Fix applying RGB profiles from the GTK interface on Fedora.</p>
