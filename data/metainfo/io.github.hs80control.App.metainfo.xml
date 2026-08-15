@@ -35,6 +35,11 @@
     <modalias>usb:v1B1Cp0A6Bd*</modalias>
   </provides>
   <releases>
+    <release version="0.2.0" date="2026-08-15">
+      <description>
+        <p>Redesigned as a native GNOME app: view switcher navigation, theme-aware cards and colors that follow the system style.</p>
+      </description>
+    </release>
     <release version="0.1.3" date="2026-08-15">
       <description>
         <p>Explain muted-microphone lighting suppression and re-apply profiles on unmute.</p>
