@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 import unittest
 
 
@@ -70,6 +71,57 @@ class GuiPresentationTests(unittest.TestCase):
             ("Unbekannt", "Noch kein Hardwarestatus"),
             self.gui._microphone_presentation(-1),
         )
+
+    def test_gtk_rgba_is_serialized_for_rgb_dbus_calls(self) -> None:
+        self.assertEqual("#12abef", self.gui._hex_color(self.gui._rgba("#12abef")))
+
+    def test_rgb_dbus_parameters_use_real_gtk_colors(self) -> None:
+        page = SimpleNamespace(
+            rgb_brightness=SimpleNamespace(get_value=lambda: 42),
+            logo_color=SimpleNamespace(get_rgba=lambda: self.gui._rgba("#123456")),
+            indicator_color=SimpleNamespace(
+                get_rgba=lambda: self.gui._rgba("#abcdef")
+            ),
+            microphone_color=SimpleNamespace(
+                get_rgba=lambda: self.gui._rgba("#fedcba")
+            ),
+        )
+
+        parameters = self.gui.HS80Window._rgb_parameters(page, "static")
+
+        self.assertEqual("(sysss)", parameters.get_type_string())
+        self.assertEqual(
+            ("static", 42, "#123456", "#abcdef", "#fedcba"),
+            parameters.unpack(),
+        )
+
+    def test_rgb_profile_read_error_does_not_lock_controls(self) -> None:
+        class ToastRecorder:
+            def __init__(self) -> None:
+                self.toasts = []
+
+            def add_toast(self, toast: object) -> None:
+                self.toasts.append(toast)
+
+        class BrokenLightingPage:
+            _lighting_apply_pending = False
+            rgb_mode = SimpleNamespace(get_selected=lambda: 1)
+            sleep_spin = SimpleNamespace(get_value=lambda: 15)
+            toast_overlay = ToastRecorder()
+
+            @staticmethod
+            def _rgb_parameters(_mode: str) -> object:
+                raise AttributeError("invalid color")
+
+            @staticmethod
+            def _set_lighting_controls_sensitive(_sensitive: bool) -> None:
+                raise AssertionError("controls must not be disabled")
+
+        page = BrokenLightingPage()
+        self.gui.HS80Window._apply_lighting(page, None)
+
+        self.assertFalse(page._lighting_apply_pending)
+        self.assertEqual(1, len(page.toast_overlay.toasts))
 
 
 if __name__ == "__main__":

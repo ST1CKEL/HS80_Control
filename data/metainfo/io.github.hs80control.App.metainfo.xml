@@ -35,6 +35,11 @@
     <modalias>usb:v1B1Cp0A6Bd*</modalias>
   </provides>
   <releases>
+    <release version="0.1.2" date="2026-08-13">
+      <description>
+        <p>Fix applying RGB profiles from the GTK interface on Fedora.</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-08-13">
       <description>
         <p>Fix hardware response matching and active headset discovery.</p>
