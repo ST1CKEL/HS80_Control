@@ -2,3 +2,9 @@
 # to vendor-control interface 3. Audio and media-control interfaces stay owned
 # by snd-usb-audio and usbhid.
 SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ENV{ID_VENDOR_ID}=="1b1c", ENV{ID_MODEL_ID}=="0a6b", ENV{ID_USB_INTERFACE_NUM}=="03", MODE="0660", TAG+="uaccess"
+
+# Headset plugged in directly and switched on: it enumerates as 1b1c:0a69
+# with three audio interfaces plus the same vendor control interface 3,
+# carrying usage page 0xff42. Audio stays with snd-usb-audio; only the
+# control interface is handed to the desktop user.
+SUBSYSTEM=="hidraw", KERNEL=="hidraw*", ENV{ID_VENDOR_ID}=="1b1c", ENV{ID_MODEL_ID}=="0a69", ENV{ID_USB_INTERFACE_NUM}=="03", MODE="0660", TAG+="uaccess"

@@ -49,9 +49,11 @@ _CSS = b"""
 
 
 def _connection_presentation(
-    headset: bool, receiver: bool, wired: bool = False
+    headset: bool, receiver: bool, wired: bool = False, mode: str = ""
 ) -> tuple[str, str]:
     if headset:
+        if mode == "usb":
+            return "●  Verbunden · USB-Kabel", "status-online"
         return "●  Verbunden", "status-online"
     if wired:
         # The cable is the whole explanation, so it outranks the receiver
@@ -723,8 +725,9 @@ class HS80Window(Adw.ApplicationWindow):
         microphone = int(self._property("MicrophoneMuted", -1))
 
         wired = bool(self._property("WiredHeadsetPresent", False))
+        mode = str(self._property("ConnectionMode", ""))
         connection_text, connection_class = _connection_presentation(
-            headset, receiver, wired
+            headset, receiver, wired, mode
         )
         self.connection_label.set_label(connection_text)
         self.connection_label.remove_css_class("status-online")
@@ -756,9 +759,15 @@ class HS80Window(Adw.ApplicationWindow):
             "Gerätefirmware" if firmware else "Noch nicht initialisiert"
         )
         self.receiver_card_value.set_label(receiver_firmware or "--")
-        self.receiver_card_detail.set_label(
-            "Firmware" if receiver_firmware else "Nicht initialisiert"
-        )
+        if receiver_firmware:
+            receiver_detail = "Firmware"
+        elif mode == "usb":
+            # No receiver is involved in cable mode; "not initialised" would
+            # read like a fault.
+            receiver_detail = "Nicht verwendet · USB-Kabel"
+        else:
+            receiver_detail = "Nicht initialisiert"
+        self.receiver_card_detail.set_label(receiver_detail)
         self.error_banner.set_title(error)
         self.error_banner.set_revealed(bool(error))
         self.audio_error_banner.set_title(

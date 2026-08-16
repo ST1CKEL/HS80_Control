@@ -138,9 +138,15 @@ def _print_status(status: dict[str, object], as_json: bool) -> None:
     charging = int(status.get("Charging", -1))
     microphone = int(status.get("MicrophoneMuted", -1))
     wired = bool(status.get("WiredHeadsetPresent"))
+    mode = str(status.get("ConnectionMode", ""))
     offline_detail = " (am USB-Ladekabel)" if wired else ""
     print(f"HS80: {'verbunden' if connected else f'offline{offline_detail}'}")
-    print(f"Receiver: {'verbunden' if status.get('ReceiverConnected') else 'offline'}")
+    if mode == "usb":
+        print("Verbindung: USB-Kabel (Direktbetrieb, ohne Receiver)")
+    else:
+        print(
+            f"Receiver: {'verbunden' if status.get('ReceiverConnected') else 'offline'}"
+        )
     print(f"Akku: {f'{battery} %' if battery >= 0 else 'unbekannt'}")
     print(f"Laden: {('ja' if charging else 'nein') if charging >= 0 else 'unbekannt'}")
     print(f"Mikrofonarm: {('stumm' if microphone else 'aktiv') if microphone >= 0 else 'unbekannt'}")

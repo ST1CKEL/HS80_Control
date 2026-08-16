@@ -34,6 +34,8 @@ from .protocol import (
     CMD_VENDOR_ID,
     RECEIVER_TARGET,
     SUPPORTED_HEADSET_PRODUCT_IDS,
+    USB_HEADSET_PRODUCT_ID,
+    USB_HEADSET_TARGET,
     VENDOR_ID,
     DeviceEvent,
     PairedDevice,
@@ -373,6 +375,38 @@ class DeviceController:
         self._next_discovery = time.monotonic() + 2.0
         return self.state.snapshot().headset_connected
 
+    def _is_usb_mode(self) -> bool:
+        return self.state.snapshot().connection_mode == "usb"
+
+    def _connect_usb_headset(self, node: HidNode) -> None:
+        # Plugged in and switched on, the headset is the whole device: it
+        # answers on the receiver target and rejects 0x09, so there is no
+        # paired-device list to walk and no receiver to report.
+        self._headset = PairedDevice(
+            vendor_id=VENDOR_ID,
+            product_id=USB_HEADSET_PRODUCT_ID,
+            device_type=0,
+            endpoint=USB_HEADSET_TARGET,
+            serial=node.serial,
+        )
+        self._headset_software_mode = False
+        self._receiver_software_mode = False
+        self.state.update(
+            connection_mode="usb",
+            receiver_connected=False,
+            receiver_firmware="",
+            serial=node.serial,
+            last_error="",
+        )
+        if hasattr(self.mixer, "bind_serial"):
+            self.mixer.bind_serial(node.serial)
+            self._refresh_mixer()
+        try:
+            self._initialize_headset()
+        except (DeviceStatusError, ProtocolError, ControllerError) as exc:
+            self.state.update(headset_connected=False, last_error=str(exc))
+        self._next_heartbeat = time.monotonic() + 10.0
+
     def _refresh_wired_state(self) -> bool:
         try:
             present = self._wired_finder() is not None
@@ -421,8 +455,12 @@ class DeviceController:
             transport = self._transport_factory(node, self._handle_event)
             self._transport = transport
             self._node = node
+            if node.product_id == USB_HEADSET_PRODUCT_ID:
+                self._connect_usb_headset(node)
+                return
             receiver_fw = transport.transfer(RECEIVER_TARGET, CMD_FIRMWARE)
             self.state.update(
+                connection_mode="wireless",
                 receiver_connected=True,
                 receiver_firmware=parse_receiver_firmware(receiver_fw),
                 last_error="",
@@ -513,7 +551,12 @@ class DeviceController:
     def _initialize_headset(self) -> None:
         transport, headset = self._require_transport_and_headset(require_online=False)
         try:
-            transport.transfer(headset.endpoint, CMD_HEARTBEAT)
+            # The directly attached headset does not implement the wireless
+            # keep-alive: 0x12 goes unanswered there and was observed to reset
+            # the device, taking the control interface down with it. Firmware
+            # is the liveness probe in that mode.
+            if not self._is_usb_mode():
+                transport.transfer(headset.endpoint, CMD_HEARTBEAT)
             firmware = transport.transfer(headset.endpoint, CMD_FIRMWARE)
             transport.transfer(headset.endpoint, CMD_SOFTWARE_MODE)
             self._headset_software_mode = True
@@ -551,8 +594,29 @@ class DeviceController:
                     self._headset_software_mode = False
             raise
 
+    def _usb_heartbeat(self) -> None:
+        # No 0x12 in this mode. Reading the battery keeps the session honest
+        # and refreshes a value the user actually sees.
+        transport, headset = self._transport, self._headset
+        if transport is None or headset is None:
+            return
+        try:
+            battery = transport.transfer(headset.endpoint, CMD_BATTERY)
+            microphone = transport.transfer(headset.endpoint, CMD_MIC_STATUS)
+        except (OSError, ProtocolError, ControllerError) as exc:
+            self._record_error(exc)
+            self._disconnect(graceful=False)
+            return
+        self.state.update(
+            battery_percent=parse_battery_percent(battery),
+            microphone_muted=int(parse_microphone_muted(microphone)),
+        )
+
     def _heartbeat(self) -> None:
         if self._transport is None:
+            return
+        if self._is_usb_mode():
+            self._usb_heartbeat()
             return
         try:
             self._transport.transfer(RECEIVER_TARGET, CMD_HEARTBEAT)
@@ -865,7 +929,9 @@ class DeviceController:
         self._receiver_software_mode = False
         self._headset_software_mode = False
         self._rgb_endpoint_open = False
-        self.state.update(receiver_connected=False, headset_connected=False)
+        self.state.update(
+            connection_mode="", receiver_connected=False, headset_connected=False
+        )
 
     def _record_error(self, error: BaseException) -> None:
         message = str(error) or type(error).__name__

@@ -105,20 +105,30 @@ keiner der in [docs/PROTOCOL.md](docs/PROTOCOL.md) genannten Quellen
 dokumentiert. Ein echtes Neukoppeln bleibt iCUE vorbehalten. Pairing und
 Firmware-Updates werden deshalb weiterhin absichtlich nicht angeboten.
 
-### Headset am Ladekabel
+### Betrieb am USB-Kabel
 
-Hängt das Headset selbst am USB-Kabel, erscheint es als eigenes Gerät
-`1b1c:0a6a`. Die App erkennt das über sysfs und schreibt es in den Status,
-statt nur „offline" zu melden. Gesteuert wird darüber nichts, und das hat
-einen harten Grund: Das Gerät meldet genau eine USB-Konfiguration mit einer
-einzigen HID-Schnittstelle bei 150 mA. Darin liegen Vendor-Page `0xff58`
-(Firmware-Update) und die Lautstärketasten — aber weder eine Audioklasse
-noch die Steuerseite `0xff42`.
+Das Headset meldet sich am Kabel je nach Zustand als **zwei verschiedene
+Geräte**:
 
-Deshalb entsteht am Kabel auch keine ALSA-Karte: Audio bindet der Kernel über
-`snd-usb-audio` an Audio-Class-Schnittstellen, und die bietet das Headset dort
-nicht an. Ton und Steuerung laufen ausschließlich über den Receiver; das Kabel
-lädt.
+| Zustand | USB-ID | Schnittstellen | Audio | Steuerung |
+| --- | --- | --- | --- | --- |
+| eingeschaltet | `1b1c:0a69` | 4 | ja, eigene ALSA-Karte | ja, `0xff42` |
+| ausgeschaltet | `1b1c:0a6a` | 1 | nein | nein |
+
+Eingeschaltet läuft alles ohne Dongle: Ton, Akku, Firmware, Mikrofonstatus,
+RGB, Sidetone und Mikrofonverstärkung. Der Dienst bevorzugt dieses Gerät, wenn
+Kabel und Receiver gleichzeitig stecken. Die udev-Regel gibt dafür zusätzlich
+`0a69` Interface 3 frei; Audio bleibt unangetastet bei `snd-usb-audio`.
+
+Ausgeschaltet lädt das Headset nur. Es bietet dann eine einzige
+HID-Schnittstelle bei 150 mA mit Vendor-Page `0xff58` und den Lautstärketasten,
+aber keine Audioklasse und kein `0xff42`. Die App erkennt auch diesen Zustand
+und benennt ihn, statt bloß „offline" zu melden.
+
+Ein Detail aus der Messung: Der Heartbeat `12` wird im Direktbetrieb nicht
+beantwortet und brachte das Gerät bei Wiederholung zum Zurücksetzen. Der Dienst
+sendet ihn dort deshalb nicht — Einzelheiten in
+[docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Voraussetzungen
 
