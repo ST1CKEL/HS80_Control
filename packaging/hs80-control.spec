@@ -1,5 +1,5 @@
 Name:           hs80-control
-Version:        0.3.0
+Version:        0.3.1
 Release:        1%{?dist}
 Summary:        Corsair HS80 RGB Wireless control service
 License:        GPL-3.0-or-later AND CC0-1.0
@@ -79,6 +79,8 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 %{_datadir}/icons/hicolor/scalable/apps/io.github.hs80control.App.svg
 
 %changelog
+* Sun Aug 16 2026 ST1CKEL - 0.3.1-1
+- Back off instead of probing an unresponsive device every two seconds
 * Sun Aug 16 2026 ST1CKEL - 0.3.0-1
 - Support the headset connected directly by USB cable, without the receiver
 - Map the cable mode's shared ALSA control for sidetone and microphone

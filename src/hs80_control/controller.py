@@ -146,6 +146,7 @@ class DeviceController:
         self._accepting = threading.Event()
         self._thread: threading.Thread | None = None
         self._spatial_lock = threading.RLock()
+        self._connect_failures = 0
         self._next_discovery = 0.0
         self._next_heartbeat = 0.0
         self._next_animation = 0.0
@@ -286,7 +287,17 @@ class DeviceController:
         now = time.monotonic()
         if self._transport is None and now >= self._next_discovery:
             self._try_connect()
-            self._next_discovery = now + 2.0
+            # A device that stops answering must not be hammered every two
+            # seconds: repeated probing was observed to keep the HS80's
+            # control interface wedged. Back off, but stay responsive to a
+            # headset that simply came back.
+            if self._transport is None:
+                self._connect_failures += 1
+                delay = min(2.0 * 2 ** min(self._connect_failures - 1, 4), 30.0)
+            else:
+                self._connect_failures = 0
+                delay = 2.0
+            self._next_discovery = time.monotonic() + delay
 
         self._process_one_request()
         now = time.monotonic()
@@ -371,6 +382,8 @@ class DeviceController:
         # heartbeat, which is what a user wants right after switching the
         # headset on. Rediscovery is rescheduled exactly as _tick would.
         self._disconnect(graceful=True)
+        # An explicit reconnect is the user overriding the backoff.
+        self._connect_failures = 0
         self._try_connect()
         self._next_discovery = time.monotonic() + 2.0
         return self.state.snapshot().headset_connected
