@@ -14,7 +14,7 @@ from typing import Callable
 
 from .alsa import AlsaMixer, MixerError
 from .config import ConfigStore, RGB_MODES
-from .discovery import HidNode, find_control_node
+from .discovery import HidNode, find_control_node, find_wired_headset
 from .hidapi import HidApi
 from .protocol import (
     CMD_BATTERY,
@@ -64,6 +64,20 @@ NO_HEADSET_MESSAGE = (
     "charge it, or move it closer to the receiver"
 )
 
+# The cable carries power, the volume keys and a firmware-update endpoint --
+# no audio class interface and no 0xff42 control page. Telling the user that
+# beats repeating "switch it on" at a headset that is plainly powered.
+WIRED_HEADSET_MESSAGE = (
+    "headset is charging on its USB cable; sound and controls run over the "
+    "receiver only, so unplug the cable once it has charged"
+)
+
+RECEIVER_MISSING_MESSAGE = "HS80 receiver not found"
+RECEIVER_MISSING_WIRED_MESSAGE = (
+    "HS80 receiver not found; the headset is on its USB cable, which charges "
+    "it but carries no audio -- plug the wireless receiver back in"
+)
+
 
 class ControllerError(RuntimeError):
     """The requested device operation could not be completed."""
@@ -97,6 +111,7 @@ class DeviceController:
         state: StateStore | None = None,
         node_finder: NodeFinder = find_control_node,
         transport_factory: TransportFactory = _default_transport_factory,
+        wired_finder: NodeFinder = find_wired_headset,
     ) -> None:
         self.config = config or ConfigStore()
         settings = self.config.snapshot()
@@ -117,6 +132,7 @@ class DeviceController:
         self.spatial = spatial or SpatialManager(self.config)
         self._node_finder = node_finder
         self._transport_factory = transport_factory
+        self._wired_finder = wired_finder
         self._transport: HidTransport | None = None
         self._node: HidNode | None = None
         self._headset: PairedDevice | None = None
@@ -357,14 +373,34 @@ class DeviceController:
         self._next_discovery = time.monotonic() + 2.0
         return self.state.snapshot().headset_connected
 
+    def _refresh_wired_state(self) -> bool:
+        try:
+            present = self._wired_finder() is not None
+        except OSError:
+            # sysfs went away mid-scan; keep the previous answer rather than
+            # claiming the cable was pulled.
+            return self.state.snapshot().wired_headset_present
+        self.state.update(wired_headset_present=present)
+        return present
+
+    def _headset_absence_message(self) -> str:
+        if self.state.snapshot().wired_headset_present:
+            return WIRED_HEADSET_MESSAGE
+        return NO_HEADSET_MESSAGE
+
     def _try_connect(self) -> None:
+        wired = self._refresh_wired_state()
         node = self._node_finder()
         if node is None:
             self.state.update(
                 receiver_connected=False,
                 headset_connected=False,
                 hid_path="",
-                last_error="HS80 receiver not found",
+                last_error=(
+                    RECEIVER_MISSING_WIRED_MESSAGE
+                    if wired
+                    else RECEIVER_MISSING_MESSAGE
+                ),
             )
             return
         self.state.update(
@@ -424,7 +460,7 @@ class DeviceController:
                     last_error=(
                         f"no supported paired HS80 found (reported: {product_ids})"
                         if product_ids
-                        else NO_HEADSET_MESSAGE
+                        else self._headset_absence_message()
                     ),
                 )
                 self._next_heartbeat = time.monotonic() + 2.0
@@ -533,8 +569,10 @@ class DeviceController:
                 self._disconnect(graceful=False)
                 return
             if self._headset is None:
+                self._refresh_wired_state()
                 self.state.update(
-                    headset_connected=False, last_error=NO_HEADSET_MESSAGE
+                    headset_connected=False,
+                    last_error=self._headset_absence_message(),
                 )
                 return
             self._headset_software_mode = False

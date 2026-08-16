@@ -35,6 +35,11 @@
     <modalias>usb:v1B1Cp0A6Bd*</modalias>
   </provides>
   <releases>
+    <release version="0.2.3" date="2026-08-16">
+      <description>
+        <p>Recognises a headset charging on its USB cable and explains that sound and controls run over the wireless receiver only.</p>
+      </description>
+    </release>
     <release version="0.2.2" date="2026-08-16">
       <description>
         <p>Adds a reconnect button that rebuilds the receiver link and searches for the headset, and explains why no headset was found instead of leaving the status blank.</p>

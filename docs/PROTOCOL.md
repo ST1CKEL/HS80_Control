@@ -11,6 +11,29 @@ experimentell.
 Diese Protokollnotizen gelten nicht für HS80 MAX, HS80 RGB USB/Wired,
 Xbox- oder Bluetooth-Varianten oder für Receiver mit anderen USB-IDs.
 
+## Headset am Ladekabel (`1b1c:0a6a`)
+
+Hängt das Headset an seinem USB-C-Kabel, meldet es sich als eigenes Gerät.
+An echter Hardware gemessen (Firmware-Stand des Receivers 5.9.130):
+
+| Eigenschaft | Wert |
+| --- | --- |
+| `bNumConfigurations` | 1 |
+| `bNumInterfaces` | 1 |
+| `bInterfaceClass` | `03` HID |
+| `MaxPower` | 150 mA |
+
+Der Report-Deskriptor dieser Schnittstelle enthält Vendor-Page `0xff58`
+(Report `0x58`, 64 Byte, Firmware-Update) sowie eine Consumer-Control-
+Collection für die Lautstärketasten. Die Steuerseite `0xff42` fehlt, ebenso
+jede Audio-Class-Schnittstelle; entsprechend entsteht keine ALSA-Karte.
+
+Über das Kabel sind daher weder Akku, RGB, Sidetone noch Mikrofonstatus
+adressierbar. Der Dienst erkennt das Gerät ausschließlich über sysfs, um den
+Zustand erklären zu können, und öffnet den zugehörigen hidraw-Knoten nie.
+Die Messung entstand bei kritisch leerem Akku; ob ein geladenes Headset
+denselben Deskriptorsatz meldet, ist nicht verifiziert.
+
 ## USB-Aufteilung
 
 | Interface | Klasse | Aufgabe |

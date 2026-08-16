@@ -48,9 +48,17 @@ _CSS = b"""
 """
 
 
-def _connection_presentation(headset: bool, receiver: bool) -> tuple[str, str]:
+def _connection_presentation(
+    headset: bool, receiver: bool, wired: bool = False
+) -> tuple[str, str]:
     if headset:
         return "●  Verbunden", "status-online"
+    if wired:
+        # The cable is the whole explanation, so it outranks the receiver
+        # state in the label: neither case carries audio.
+        if receiver:
+            return "●  Headset am Ladekabel · kein Ton", "status-standby"
+        return "●  Headset am Ladekabel · Receiver fehlt", "status-offline"
     if receiver:
         return "●  Receiver bereit · Headset offline", "status-standby"
     return "●  Receiver offline", "status-offline"
@@ -714,7 +722,10 @@ class HS80Window(Adw.ApplicationWindow):
         receiver_firmware = str(self._property("ReceiverFirmware", ""))
         microphone = int(self._property("MicrophoneMuted", -1))
 
-        connection_text, connection_class = _connection_presentation(headset, receiver)
+        wired = bool(self._property("WiredHeadsetPresent", False))
+        connection_text, connection_class = _connection_presentation(
+            headset, receiver, wired
+        )
         self.connection_label.set_label(connection_text)
         self.connection_label.remove_css_class("status-online")
         self.connection_label.remove_css_class("status-standby")

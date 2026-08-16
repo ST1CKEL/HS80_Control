@@ -85,6 +85,8 @@ eindeutigen Fehlermeldung ab.
 - sichere Hotplug-, Standby- und Wiederverbindungsbehandlung
 - Reconnect auf Knopfdruck, baut die Receiver-Sitzung neu auf und sucht das
   Headset
+- erkennt ein Headset am USB-Ladekabel und erklärt, warum darüber kein Ton
+  läuft
 
 Audio und Mikrofon bleiben beim Kernelmodul `snd-usb-audio`. Der Dienst öffnet
 nur HID-Interface 3 und trennt keine USB- oder Audio-Treiber.
@@ -102,6 +104,21 @@ werden ab Werk gekoppelt ausgeliefert, und der dafür nötige Befehl ist in
 keiner der in [docs/PROTOCOL.md](docs/PROTOCOL.md) genannten Quellen
 dokumentiert. Ein echtes Neukoppeln bleibt iCUE vorbehalten. Pairing und
 Firmware-Updates werden deshalb weiterhin absichtlich nicht angeboten.
+
+### Headset am Ladekabel
+
+Hängt das Headset selbst am USB-Kabel, erscheint es als eigenes Gerät
+`1b1c:0a6a`. Die App erkennt das über sysfs und schreibt es in den Status,
+statt nur „offline" zu melden. Gesteuert wird darüber nichts, und das hat
+einen harten Grund: Das Gerät meldet genau eine USB-Konfiguration mit einer
+einzigen HID-Schnittstelle bei 150 mA. Darin liegen Vendor-Page `0xff58`
+(Firmware-Update) und die Lautstärketasten — aber weder eine Audioklasse
+noch die Steuerseite `0xff42`.
+
+Deshalb entsteht am Kabel auch keine ALSA-Karte: Audio bindet der Kernel über
+`snd-usb-audio` an Audio-Class-Schnittstellen, und die bietet das Headset dort
+nicht an. Ton und Steuerung laufen ausschließlich über den Receiver; das Kabel
+lädt.
 
 ## Voraussetzungen
 

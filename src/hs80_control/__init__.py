@@ -1,3 +1,3 @@
 """Corsair HS80 RGB Wireless control service."""
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
