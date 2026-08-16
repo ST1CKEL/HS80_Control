@@ -1,9 +1,28 @@
 # HS80 Control
 
-Linux-Steuerung für ein kompatibles **Corsair HS80 RGB Wireless** mit dem
-USB-Empfänger `1b1c:0a6b`. Das Projekt besteht aus einem Benutzerdienst, einer
-D-Bus-API, einem Kommandozeilenprogramm und einer GTK4/libadwaita-Oberfläche,
-die unter KDE Plasma und Wayland läuft.
+[![Checks](https://github.com/ST1CKEL/HS80_Control/actions/workflows/check.yml/badge.svg)](https://github.com/ST1CKEL/HS80_Control/actions/workflows/check.yml)
+[![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab)](https://www.python.org/)
+[![Fedora 44](https://img.shields.io/badge/getestet-Fedora%2044-51a2da)](https://fedoraproject.org/)
+
+Native Linux-Steuerung für das **Corsair HS80 RGB Wireless** — kabellos über den
+USB-Empfänger `1b1c:0a6b` oder direkt am USB-Kabel (`1b1c:0a69`), ganz ohne
+Dongle. Akku, Beleuchtung, Sidetone, Mikrofon und binaurales 7.1 ohne iCUE und
+ohne Windows.
+
+Das Projekt besteht aus einem Benutzerdienst, einer D-Bus-API, einem
+Kommandozeilenprogramm und einer GTK4/libadwaita-Oberfläche, die den
+Systemfarben folgt und unter Wayland wie X11 läuft.
+
+```bash
+hs80ctl status                      # Akku, Firmware, Verbindungsart
+hs80ctl rgb static --logo '#00bfff' # Beleuchtung setzen
+hs80ctl reconnect                   # Funkverbindung neu aufbauen
+```
+
+> Kein offizielles Corsair-Produkt. Das Protokoll wurde aus öffentlich
+> verfügbaren Arbeiten und eigenen Messungen an echter Hardware rekonstruiert;
+> Einzelheiten in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Screenshots
 
@@ -22,13 +41,13 @@ entstehen unter KDE Plasma mit dunklem Schema.
 
 | Komponente | Anforderung |
 | --- | --- |
-| Hardware | Corsair HS80 RGB Wireless mit Receiver `1b1c:0a6b` (interne Headset-PID `0a69` bestätigt, `0a71` experimentell) |
+| Hardware | Corsair HS80 RGB Wireless, über Receiver `1b1c:0a6b` (interne Headset-PID `0a69` bestätigt, `0a71` experimentell) oder direkt am USB-Kabel als `1b1c:0a69` |
 | Betriebssystem | Linux mit systemd-Benutzersitzung; entwickelt und getestet auf Fedora 44 |
 | Python | 3.11 oder neuer |
 | Grafik | GTK 4 und libadwaita ≥ 1.7 (Fedora 44 liefert 1.9); Wayland und X11 |
 | Audio | PipeWire mit WirePlumber (Spatial Audio zusätzlich `pipewire-module-filter-chain-sofa`) |
-| HID-Zugriff | `hidapi` (hidraw-Backend) plus die mitgelieferte udev-Regel für Interface 3 |
-| mixer | `alsa-utils` für Sidetone, Mikrofon-Gain und Aufnahmestummschaltung |
+| HID-Zugriff | `hidapi` (hidraw-Backend) plus die mitgelieferte udev-Regel für Interface 3 beider Kennungen |
+| Mixer | `alsa-utils` für Sidetone, Mikrofon-Gain und Aufnahmestummschaltung |
 | Optional | EasyEffects für RNNoise, Gate und Kompressor |
 
 Die Benutzeroberfläche reagiert adaptiv: ab einer Fensterbreite von 600 sp
@@ -44,16 +63,19 @@ gesamte HS80-Produktfamilie:
 
 | Variante | Kennungen | Status |
 | --- | --- | --- |
-| Corsair HS80 RGB Wireless | Receiver `1b1c:0a6b`, interne Headset-PID `0a69` | Unterstützt und an echter Hardware bestätigt |
+| HS80 RGB Wireless über den Receiver | Receiver `1b1c:0a6b`, interne Headset-PID `0a69` | Unterstützt und an echter Hardware bestätigt |
+| HS80 RGB Wireless am USB-Kabel, eingeschaltet | Headset `1b1c:0a69` direkt | Unterstützt und an echter Hardware bestätigt; kein Receiver nötig |
+| HS80 RGB Wireless am USB-Kabel, ausgeschaltet | Headset `1b1c:0a6a` direkt | Wird erkannt und als Ladezustand gemeldet; bietet weder Audio noch Steuerprotokoll |
 | HS80 RGB Wireless mit alternativer interner PID | Receiver `1b1c:0a6b`, interne Headset-PID `0a71` | Im Code experimentell berücksichtigt; diese Kombination ist nicht an Hardware bestätigt |
-| HS80 MAX, HS80 RGB USB/Wired sowie Xbox- oder Bluetooth-Varianten | anderer oder kein kompatibler Receiver | Nicht unterstützt |
-| HS80 mit einer anderen Receiver-USB-ID | nicht `1b1c:0a6b` | Nicht unterstützt |
+| HS80 MAX sowie Xbox- oder Bluetooth-Varianten | anderer oder kein kompatibler Receiver | Nicht unterstützt |
+| HS80 mit einer anderen Receiver-USB-ID | weder `1b1c:0a6b` noch `1b1c:0a69` | Nicht unterstützt |
 
-Die interne Headset-PID wird über den Receiver abgefragt und erscheint
-normalerweise nicht als separates USB-Gerät in `lsusb`. Sondereditionen sind
-nur dann voraussichtlich kompatibel, wenn sie denselben Receiver und eine der
-beiden genannten internen PIDs verwenden. Ein erster lokaler Infrastrukturtest
-ist:
+Im Funkbetrieb wird die interne Headset-PID über den Receiver abgefragt; das
+Headset erscheint dann nicht separat in `lsusb`. Am Kabel meldet es sich
+dagegen als eigenes USB-Gerät, dessen ID vom Einschaltzustand abhängt — die
+Messwerte dazu stehen in [docs/PROTOCOL.md](docs/PROTOCOL.md). Sondereditionen
+sind nur dann voraussichtlich kompatibel, wenn sie dieselben Kennungen
+verwenden. Ein erster lokaler Infrastrukturtest ist:
 
 ```bash
 hs80ctl doctor
