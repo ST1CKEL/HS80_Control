@@ -44,6 +44,32 @@ class GuiPresentationTests(unittest.TestCase):
             self.gui._connection_presentation(False, False),
         )
 
+    def test_usb_mode_is_named_in_the_connection_label(self) -> None:
+        self.assertEqual(
+            ("●  Verbunden · USB-Kabel", "status-online"),
+            self.gui._connection_presentation(True, False, False, "usb"),
+        )
+        self.assertEqual(
+            ("●  Verbunden", "status-online"),
+            self.gui._connection_presentation(True, True, False, "wireless"),
+        )
+
+    def test_charging_cable_outranks_the_receiver_state(self) -> None:
+        # The cable carries no audio either way, so it is the useful label.
+        self.assertEqual(
+            ("●  Headset am Ladekabel · kein Ton", "status-standby"),
+            self.gui._connection_presentation(False, True, True),
+        )
+        self.assertEqual(
+            ("●  Headset am Ladekabel · Receiver fehlt", "status-offline"),
+            self.gui._connection_presentation(False, False, True),
+        )
+        # A live wireless link still wins over a plugged-in cable.
+        self.assertEqual(
+            ("●  Verbunden", "status-online"),
+            self.gui._connection_presentation(True, True, True),
+        )
+
     def test_battery_state_handles_unknown_and_charging(self) -> None:
         self.assertEqual(
             ("-- %", "Noch kein Akkureport"),

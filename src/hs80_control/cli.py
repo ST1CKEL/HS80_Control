@@ -35,6 +35,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("status", help="show headset state")
     subparsers.add_parser("refresh", help="refresh battery and mixer state")
+    subparsers.add_parser(
+        "reconnect", help="rebuild the receiver link and search for the headset"
+    )
     subparsers.add_parser("doctor", help="inspect local USB, ALSA and PipeWire support")
 
     rgb = subparsers.add_parser("rgb", help="set RGB mode and colors")
@@ -134,8 +137,16 @@ def _print_status(status: dict[str, object], as_json: bool) -> None:
     battery = int(status.get("BatteryPercent", -1))
     charging = int(status.get("Charging", -1))
     microphone = int(status.get("MicrophoneMuted", -1))
-    print(f"HS80: {'verbunden' if connected else 'offline'}")
-    print(f"Receiver: {'verbunden' if status.get('ReceiverConnected') else 'offline'}")
+    wired = bool(status.get("WiredHeadsetPresent"))
+    mode = str(status.get("ConnectionMode", ""))
+    offline_detail = " (am USB-Ladekabel)" if wired else ""
+    print(f"HS80: {'verbunden' if connected else f'offline{offline_detail}'}")
+    if mode == "usb":
+        print("Verbindung: USB-Kabel (Direktbetrieb, ohne Receiver)")
+    else:
+        print(
+            f"Receiver: {'verbunden' if status.get('ReceiverConnected') else 'offline'}"
+        )
     print(f"Akku: {f'{battery} %' if battery >= 0 else 'unbekannt'}")
     print(f"Laden: {('ja' if charging else 'nein') if charging >= 0 else 'unbekannt'}")
     print(f"Mikrofonarm: {('stumm' if microphone else 'aktiv') if microphone >= 0 else 'unbekannt'}")
@@ -173,6 +184,8 @@ async def run(arguments: argparse.Namespace) -> int:
         applied: bool | None = None
         if command == "refresh":
             applied = await _dbus_call(interface.call_refresh())
+        elif command == "reconnect":
+            applied = await _dbus_call(interface.call_reconnect())
         elif command == "rgb":
             applied = await _dbus_call(
                 interface.call_update_rgb(
@@ -226,7 +239,16 @@ async def run(arguments: argparse.Namespace) -> int:
                 )
 
         status = await _status(properties)
-        if command == "status" or command == "refresh":
+        if command == "reconnect" and not arguments.json:
+            # The generic "applied" wording says nothing useful here; the
+            # interesting answer is whether a headset turned up.
+            print(
+                "Headset verbunden."
+                if applied
+                else "Kein Headset gefunden; Receiver-Verbindung neu aufgebaut."
+            )
+            _print_status(status, False)
+        elif command == "status" or command == "refresh":
             _print_status(status, arguments.json)
         elif arguments.json:
             print(

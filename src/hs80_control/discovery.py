@@ -7,7 +7,13 @@ import os
 from pathlib import Path
 from typing import Iterable
 
-from .protocol import CONTROL_INTERFACE, RECEIVER_PRODUCT_ID, VENDOR_ID
+from .protocol import (
+    CONTROL_INTERFACE,
+    RECEIVER_PRODUCT_ID,
+    USB_HEADSET_PRODUCT_ID,
+    VENDOR_ID,
+    WIRED_HEADSET_PRODUCT_ID,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +83,9 @@ def inspect_hidraw_node(class_entry: Path, dev_root: Path = Path("/dev")) -> Hid
 
 
 def discover_hid_nodes(
-    sys_class: Path = Path("/sys/class/hidraw"), dev_root: Path = Path("/dev")
+    sys_class: Path = Path("/sys/class/hidraw"),
+    dev_root: Path = Path("/dev"),
+    product_id: int = RECEIVER_PRODUCT_ID,
 ) -> list[HidNode]:
     try:
         entries: Iterable[Path] = sorted(sys_class.glob("hidraw*"))
@@ -87,15 +95,50 @@ def discover_hid_nodes(
     nodes: list[HidNode] = []
     for entry in entries:
         node = inspect_hidraw_node(entry, dev_root)
-        if node and node.vendor_id == VENDOR_ID and node.product_id == RECEIVER_PRODUCT_ID:
+        if node and node.vendor_id == VENDOR_ID and node.product_id == product_id:
             nodes.append(node)
     return nodes
+
+
+def find_wired_headset(
+    sys_class: Path = Path("/sys/class/hidraw"), dev_root: Path = Path("/dev")
+) -> HidNode | None:
+    """Report a headset sitting on its charging cable.
+
+    Detection is sysfs-only on purpose: the node belongs to root because the
+    udev rule deliberately covers just the receiver's control interface, and
+    nothing here ever opens it. Knowing the cable is plugged in is what turns
+    a bare "offline" into an explanation.
+    """
+
+    return next(
+        iter(discover_hid_nodes(sys_class, dev_root, WIRED_HEADSET_PRODUCT_ID)), None
+    )
+
+
+def _control_node_for(
+    product_id: int, sys_class: Path, dev_root: Path
+) -> HidNode | None:
+    return next(
+        (
+            node
+            for node in discover_hid_nodes(sys_class, dev_root, product_id)
+            if node.interface == CONTROL_INTERFACE
+        ),
+        None,
+    )
 
 
 def find_control_node(
     sys_class: Path = Path("/sys/class/hidraw"), dev_root: Path = Path("/dev")
 ) -> HidNode | None:
-    return next(
-        (node for node in discover_hid_nodes(sys_class, dev_root) if node.interface == CONTROL_INTERFACE),
-        None,
-    )
+    """Return the control interface to drive, cable before receiver.
+
+    A headset switched on while plugged in exposes control interface 3 itself.
+    It is preferred when both are present: in that state the headset is on the
+    cable, so the receiver has nothing paired to it anyway.
+    """
+
+    return _control_node_for(
+        USB_HEADSET_PRODUCT_ID, sys_class, dev_root
+    ) or _control_node_for(RECEIVER_PRODUCT_ID, sys_class, dev_root)

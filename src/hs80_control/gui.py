@@ -48,9 +48,19 @@ _CSS = b"""
 """
 
 
-def _connection_presentation(headset: bool, receiver: bool) -> tuple[str, str]:
+def _connection_presentation(
+    headset: bool, receiver: bool, wired: bool = False, mode: str = ""
+) -> tuple[str, str]:
     if headset:
+        if mode == "usb":
+            return "●  Verbunden · USB-Kabel", "status-online"
         return "●  Verbunden", "status-online"
+    if wired:
+        # The cable is the whole explanation, so it outranks the receiver
+        # state in the label: neither case carries audio.
+        if receiver:
+            return "●  Headset am Ladekabel · kein Ton", "status-standby"
+        return "●  Headset am Ladekabel · Receiver fehlt", "status-offline"
     if receiver:
         return "●  Receiver bereit · Headset offline", "status-standby"
     return "●  Receiver offline", "status-offline"
@@ -187,6 +197,15 @@ class HS80Window(Adw.ApplicationWindow):
         self.refresh_button.set_tooltip_text("Status aktualisieren")
         self.refresh_button.connect("clicked", self._refresh)
         self.header.pack_end(self.refresh_button)
+
+        self.reconnect_button = Gtk.Button.new_from_icon_name(
+            "network-wireless-symbolic"
+        )
+        self.reconnect_button.set_tooltip_text(
+            "Funkverbindung neu aufbauen und Headset suchen"
+        )
+        self.reconnect_button.connect("clicked", self._reconnect)
+        self.header.pack_end(self.reconnect_button)
 
         about_action = Gio.SimpleAction.new("about", None)
         about_action.connect("activate", self._show_about)
@@ -705,7 +724,11 @@ class HS80Window(Adw.ApplicationWindow):
         receiver_firmware = str(self._property("ReceiverFirmware", ""))
         microphone = int(self._property("MicrophoneMuted", -1))
 
-        connection_text, connection_class = _connection_presentation(headset, receiver)
+        wired = bool(self._property("WiredHeadsetPresent", False))
+        mode = str(self._property("ConnectionMode", ""))
+        connection_text, connection_class = _connection_presentation(
+            headset, receiver, wired, mode
+        )
         self.connection_label.set_label(connection_text)
         self.connection_label.remove_css_class("status-online")
         self.connection_label.remove_css_class("status-standby")
@@ -736,9 +759,15 @@ class HS80Window(Adw.ApplicationWindow):
             "Gerätefirmware" if firmware else "Noch nicht initialisiert"
         )
         self.receiver_card_value.set_label(receiver_firmware or "--")
-        self.receiver_card_detail.set_label(
-            "Firmware" if receiver_firmware else "Nicht initialisiert"
-        )
+        if receiver_firmware:
+            receiver_detail = "Firmware"
+        elif mode == "usb":
+            # No receiver is involved in cable mode; "not initialised" would
+            # read like a fault.
+            receiver_detail = "Nicht verwendet · USB-Kabel"
+        else:
+            receiver_detail = "Nicht initialisiert"
+        self.receiver_card_detail.set_label(receiver_detail)
         self.error_banner.set_title(error)
         self.error_banner.set_revealed(bool(error))
         self.audio_error_banner.set_title(
@@ -879,6 +908,32 @@ class HS80Window(Adw.ApplicationWindow):
             None,
             show_result=False,
             always=lambda: self.refresh_button.set_sensitive(True),
+        )
+
+    def _reconnect(self, _button: Gtk.Button) -> None:
+        self.reconnect_button.set_sensitive(False)
+
+        def finished(success: bool, applied: bool) -> None:
+            if not success:
+                # _call already reported the D-Bus error in a toast.
+                return
+            self.toast_overlay.add_toast(
+                Adw.Toast(
+                    title=(
+                        "Headset verbunden"
+                        if applied
+                        else "Kein Headset gefunden - eingeschaltet und in Reichweite?"
+                    ),
+                    timeout=5,
+                )
+            )
+
+        self._call(
+            "Reconnect",
+            None,
+            callback=finished,
+            show_result=False,
+            always=lambda: self.reconnect_button.set_sensitive(True),
         )
 
     def _quick_rgb_off(self, _button: Gtk.Button) -> None:
