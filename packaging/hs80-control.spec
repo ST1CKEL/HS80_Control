@@ -1,5 +1,5 @@
 Name:           hs80-control
-Version:        0.2.1
+Version:        0.2.2
 Release:        1%{?dist}
 Summary:        Corsair HS80 RGB Wireless control service
 License:        GPL-3.0-or-later AND CC0-1.0
@@ -79,6 +79,10 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 %{_datadir}/icons/hicolor/scalable/apps/io.github.hs80control.App.svg
 
 %changelog
+* Sun Aug 16 2026 ST1CKEL - 0.2.2-1
+- Add a reconnect action that rebuilds the receiver link on demand
+- Explain an absent headset instead of reporting an empty error
+- Report the real errno when hidapi returns an uninformative message
 * Sat Aug 15 2026 ST1CKEL - 0.2.1-1
 - Fix narrow-window switcher bar on libadwaita 1.9 (reveal property)
 - Harden battery ring color lookup against missing theme colors
