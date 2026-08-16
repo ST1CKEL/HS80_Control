@@ -20,8 +20,11 @@ class DeviceState:
     charging: int = -1
     microphone_muted: int = -1
     hid_path: str = ""
-    # True while the headset itself sits on USB. It charges there and offers
-    # no audio or control protocol, so this only ever explains the state.
+    # "wireless" over the receiver, "usb" for a headset switched on while
+    # plugged in, "" while nothing is connected.
+    connection_mode: str = ""
+    # True while the headset sits on USB switched off. It only charges there
+    # and offers no audio or control protocol, so this just explains the state.
     wired_headset_present: bool = False
     last_error: str = ""
     rgb_mode: str = "static"

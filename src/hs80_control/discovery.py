@@ -10,6 +10,7 @@ from typing import Iterable
 from .protocol import (
     CONTROL_INTERFACE,
     RECEIVER_PRODUCT_ID,
+    USB_HEADSET_PRODUCT_ID,
     VENDOR_ID,
     WIRED_HEADSET_PRODUCT_ID,
 )
@@ -115,10 +116,29 @@ def find_wired_headset(
     )
 
 
+def _control_node_for(
+    product_id: int, sys_class: Path, dev_root: Path
+) -> HidNode | None:
+    return next(
+        (
+            node
+            for node in discover_hid_nodes(sys_class, dev_root, product_id)
+            if node.interface == CONTROL_INTERFACE
+        ),
+        None,
+    )
+
+
 def find_control_node(
     sys_class: Path = Path("/sys/class/hidraw"), dev_root: Path = Path("/dev")
 ) -> HidNode | None:
-    return next(
-        (node for node in discover_hid_nodes(sys_class, dev_root) if node.interface == CONTROL_INTERFACE),
-        None,
-    )
+    """Return the control interface to drive, cable before receiver.
+
+    A headset switched on while plugged in exposes control interface 3 itself.
+    It is preferred when both are present: in that state the headset is on the
+    cable, so the receiver has nothing paired to it anyway.
+    """
+
+    return _control_node_for(
+        USB_HEADSET_PRODUCT_ID, sys_class, dev_root
+    ) or _control_node_for(RECEIVER_PRODUCT_ID, sys_class, dev_root)

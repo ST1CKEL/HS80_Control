@@ -21,6 +21,7 @@ from hs80_control.protocol import (
     CMD_BATTERY,
     CMD_FIRMWARE,
     CMD_HARDWARE_MODE,
+    CMD_HEARTBEAT,
     CMD_MIC_STATUS,
     CMD_PRODUCT_ID,
     CMD_RGB_CLOSE,
@@ -577,6 +578,130 @@ class ControllerTests(unittest.TestCase):
             state = controller.snapshot()
             self.assertFalse(state.wired_headset_present)
             self.assertEqual(RECEIVER_MISSING_MESSAGE, state.last_error)
+            controller.stop()
+
+    def test_headset_on_the_cable_is_driven_without_a_receiver(self) -> None:
+        node = HidNode(
+            path=Path("/dev/hidraw-usb"),
+            sysfs_path=Path("/sys/test-usb"),
+            interface=3,
+            vendor_id=0x1B1C,
+            product_id=0x0A69,
+            serial="HEADSET",
+            product="HS80 RGB USB Gaming Headset",
+            readable=True,
+            writable=True,
+        )
+
+        class UsbTransport(FakeTransport):
+            """Models the cable device: one endpoint 0x08, no 0x12 support."""
+
+            def __init__(self) -> None:
+                super().__init__()
+                self.heartbeats = 0
+
+            def transfer(
+                self,
+                target: int,
+                command: bytes,
+                payload: bytes = b"",
+                timeout_ms: int = 1000,
+            ) -> bytes:
+                if command == CMD_HEARTBEAT:
+                    # Record rather than raise: a stray exception type would
+                    # travel through the controller's error handling and mask
+                    # what this test is actually about.
+                    self.heartbeats += 1
+                if target != 0x08:
+                    raise DeviceStatusError(target, command, 0x06)
+                self.calls.append((target, command, payload))
+                response = bytearray(64)
+                if command == CMD_FIRMWARE:
+                    # The headset itself answers here, not a receiver.
+                    response[4:7] = bytes((4, 5, 6))
+                elif command == CMD_BATTERY:
+                    response[4:6] = (730).to_bytes(2, "little")
+                elif command == CMD_MIC_STATUS:
+                    response[4] = 1
+                return bytes(response)
+
+        transport = UsbTransport()
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: node,
+                transport_factory=lambda _node, _callback: transport,  # type: ignore[arg-type]
+                wired_finder=lambda: None,
+            )
+            controller.start()
+            deadline = time.monotonic() + 1
+            while not controller.snapshot().headset_connected and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+            state = controller.snapshot()
+            self.assertEqual("usb", state.connection_mode)
+            self.assertTrue(state.headset_connected)
+            # There is no receiver in this mode; claiming one would be wrong.
+            self.assertFalse(state.receiver_connected)
+            self.assertEqual("", state.receiver_firmware)
+            self.assertEqual("HEADSET", state.serial)
+            self.assertEqual("4.5.6", state.firmware)
+            self.assertEqual(73, state.battery_percent)
+            self.assertEqual("", state.last_error)
+            # 0x12 resets the real device, so it must never be sent here.
+            self.assertEqual(0, transport.heartbeats)
+            controller.stop()
+
+    def test_usb_heartbeat_refreshes_battery_without_command_0x12(self) -> None:
+        node = HidNode(
+            path=Path("/dev/hidraw-usb"),
+            sysfs_path=Path("/sys/test-usb"),
+            interface=3,
+            vendor_id=0x1B1C,
+            product_id=0x0A69,
+            serial="HEADSET",
+            product="HS80 RGB USB Gaming Headset",
+            readable=True,
+            writable=True,
+        )
+
+        class CountingTransport(FakeTransport):
+            def __init__(self) -> None:
+                super().__init__()
+                self.heartbeats = 0
+
+            def transfer(
+                self,
+                target: int,
+                command: bytes,
+                payload: bytes = b"",
+                timeout_ms: int = 1000,
+            ) -> bytes:
+                if command == CMD_HEARTBEAT:
+                    self.heartbeats += 1
+                return super().transfer(target, command, payload, timeout_ms)
+
+        transport = CountingTransport()
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: node,
+                transport_factory=lambda _node, _callback: transport,  # type: ignore[arg-type]
+                wired_finder=lambda: None,
+            )
+            controller.start()
+            deadline = time.monotonic() + 1
+            while not controller.snapshot().headset_connected and time.monotonic() < deadline:
+                time.sleep(0.01)
+            before = transport.heartbeats
+            controller._usb_heartbeat()
+
+            self.assertEqual(before, transport.heartbeats)
+            self.assertEqual(73, controller.snapshot().battery_percent)
             controller.stop()
 
     def test_active_probe_skips_rejected_channel_and_finds_later_hs80(self) -> None:

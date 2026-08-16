@@ -11,6 +11,44 @@ experimentell.
 Diese Protokollnotizen gelten nicht für HS80 MAX, HS80 RGB USB/Wired,
 Xbox- oder Bluetooth-Varianten oder für Receiver mit anderen USB-IDs.
 
+## Direktbetrieb am USB-Kabel (`1b1c:0a69`)
+
+Eingeschaltet am Kabel meldet sich das Headset als eigenes Gerät mit vier
+Schnittstellen: drei Audio-Class und Interface 3 mit Usage Page `0xff42`,
+also demselben Steuerprotokoll wie der Receiver. An echter Hardware gemessen:
+
+| Kommando | Ziel `0x08` | Ziel `0x09` |
+| --- | --- | --- |
+| `02 13` Firmware | `01 00 02 00 05 08 30 00` → 5.8.48 | Status `0x06` |
+| `02 0f` Akku | `01 00 02 00 ca 03` → 97 % | Status `0x06` |
+| `02 a6` Mikrofon | `01 00 02 00 01` → stumm | Status `0x06` |
+| `02 11` / `02 12` | `1b1c` / `0a69` | Status `0x06` |
+| `01 03 00 02` Softwaremodus | bestätigt | — |
+| `05 01 00` / `0d 00 01` RGB | bestätigt | — |
+| `01 0d 00` / `01 0e 00` Sleep | bestätigt | — |
+| **`12` Heartbeat** | **keine Antwort** | — |
+
+Das Headset ist hier selbst das Gerät auf `0x08`; einen Receiver gibt es nicht,
+und `0x09` wird durchgehend mit Status `0x06` abgelehnt. Eine Abfrage der
+gekoppelten Geräteliste entfällt.
+
+Der Heartbeat `12` ist die einzige Ausnahme: Er bleibt unbeantwortet, und
+wiederholtes Senden führte an echter Hardware zu einer Neuanmeldung des
+Geräts, nach der das Steuerinterface bis zum Aus- und Einschalten des Headsets
+gar nicht mehr antwortete. Der Dienst sendet ihn im Direktbetrieb deshalb
+nicht; als Lebenszeichen dienen Firmware beim Verbinden und Akku im Zyklus.
+
+### ALSA im Direktbetrieb
+
+Die Reglernamen unterscheiden sich vom Receiver. Sidetone und Mikrofon liegen
+auf **demselben** Simple Control und werden über die Richtung getrennt:
+
+| Simple Control | Richtung | Bereich | Funktion |
+| --- | --- | --- | --- |
+| `Headset,0` | Playback | `-42` bis `+4 dB` | Sidetone |
+| `Headset,0` | Capture | `-36` bis `0 dB` | Mikrofonverstärkung |
+| `Headset,1` | Playback | `-64` bis `0 dB` | Kopfhörerlautstärke |
+
 ## Headset am Ladekabel (`1b1c:0a6a`)
 
 Hängt das Headset an seinem USB-C-Kabel, meldet es sich als eigenes Gerät.

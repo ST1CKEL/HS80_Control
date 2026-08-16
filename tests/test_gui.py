@@ -44,6 +44,16 @@ class GuiPresentationTests(unittest.TestCase):
             self.gui._connection_presentation(False, False),
         )
 
+    def test_usb_mode_is_named_in_the_connection_label(self) -> None:
+        self.assertEqual(
+            ("●  Verbunden · USB-Kabel", "status-online"),
+            self.gui._connection_presentation(True, False, False, "usb"),
+        )
+        self.assertEqual(
+            ("●  Verbunden", "status-online"),
+            self.gui._connection_presentation(True, True, False, "wireless"),
+        )
+
     def test_charging_cable_outranks_the_receiver_state(self) -> None:
         # The cable carries no audio either way, so it is the useful label.
         self.assertEqual(
