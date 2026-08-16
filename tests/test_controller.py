@@ -8,7 +8,11 @@ import unittest
 
 from hs80_control.alsa import MixerError, MixerSnapshot, MixerValue
 from hs80_control.config import ConfigStore
-from hs80_control.controller import ControllerError, DeviceController
+from hs80_control.controller import (
+    NO_HEADSET_MESSAGE,
+    ControllerError,
+    DeviceController,
+)
 from hs80_control.discovery import HidNode
 from hs80_control.protocol import (
     CMD_BATTERY,
@@ -322,6 +326,46 @@ class ControllerTests(unittest.TestCase):
             self.assertTrue(state.headset_connected)
             self.assertEqual("4.5.6", state.firmware)
             self.assertEqual(73, state.battery_percent)
+            controller.stop()
+
+    def test_switched_off_headset_reports_an_actionable_reason(self) -> None:
+        node = HidNode(
+            path=Path("/dev/hidraw-test"),
+            sysfs_path=Path("/sys/test"),
+            interface=3,
+            vendor_id=0x1B1C,
+            product_id=0x0A6B,
+            serial="RECEIVER",
+            product="HS80 Receiver",
+            readable=True,
+            writable=True,
+        )
+
+        class NoHeadsetTransport(FakeTransport):
+            """A healthy receiver whose subdevice bitfield stays empty."""
+
+            def read_resource(self, _resource: bytes, timeout_ms: int = 1000) -> bytes:
+                del timeout_ms
+                raise DeviceStatusError(RECEIVER_TARGET, bytes((0x08, 0x01)), 0x02)
+
+        transport = NoHeadsetTransport()
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: node,
+                transport_factory=lambda _node, _callback: transport,  # type: ignore[arg-type]
+            )
+            controller.start()
+            deadline = time.monotonic() + 1
+            while not controller.snapshot().receiver_connected and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+            state = controller.snapshot()
+            self.assertTrue(state.receiver_connected)
+            self.assertFalse(state.headset_connected)
+            self.assertEqual(NO_HEADSET_MESSAGE, state.last_error)
             controller.stop()
 
     def test_active_probe_skips_rejected_channel_and_finds_later_hs80(self) -> None:

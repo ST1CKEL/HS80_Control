@@ -56,6 +56,14 @@ from .transport import DeviceStatusError, HidTransport
 
 LOG = logging.getLogger(__name__)
 
+# A healthy receiver that reports an empty subdevice bitfield is the normal
+# picture for a headset that is switched off. Saying so beats leaving the
+# status blank, which reads like the software simply gave up.
+NO_HEADSET_MESSAGE = (
+    "receiver reports no connected headset; switch the HS80 on, "
+    "charge it, or move it closer to the receiver"
+)
+
 
 class ControllerError(RuntimeError):
     """The requested device operation could not be completed."""
@@ -400,7 +408,7 @@ class DeviceController:
                     last_error=(
                         f"no supported paired HS80 found (reported: {product_ids})"
                         if product_ids
-                        else ""
+                        else NO_HEADSET_MESSAGE
                     ),
                 )
                 self._next_heartbeat = time.monotonic() + 2.0
@@ -509,7 +517,9 @@ class DeviceController:
                 self._disconnect(graceful=False)
                 return
             if self._headset is None:
-                self.state.update(headset_connected=False, last_error="")
+                self.state.update(
+                    headset_connected=False, last_error=NO_HEADSET_MESSAGE
+                )
                 return
             self._headset_software_mode = False
             self.state.update(serial=self._headset.serial)
