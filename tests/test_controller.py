@@ -10,6 +10,9 @@ from hs80_control.alsa import MixerError, MixerSnapshot, MixerValue
 from hs80_control.config import ConfigStore
 from hs80_control.controller import (
     NO_HEADSET_MESSAGE,
+    RECEIVER_MISSING_MESSAGE,
+    RECEIVER_MISSING_WIRED_MESSAGE,
+    WIRED_HEADSET_MESSAGE,
     ControllerError,
     DeviceController,
 )
@@ -475,6 +478,105 @@ class ControllerTests(unittest.TestCase):
             self.assertTrue(state.receiver_connected)
             self.assertFalse(state.headset_connected)
             self.assertEqual(NO_HEADSET_MESSAGE, state.last_error)
+            controller.stop()
+
+    def test_charging_cable_replaces_the_switch_it_on_advice(self) -> None:
+        node = HidNode(
+            path=Path("/dev/hidraw-test"),
+            sysfs_path=Path("/sys/test"),
+            interface=3,
+            vendor_id=0x1B1C,
+            product_id=0x0A6B,
+            serial="RECEIVER",
+            product="HS80 Receiver",
+            readable=True,
+            writable=True,
+        )
+        wired = HidNode(
+            path=Path("/dev/hidraw-wired"),
+            sysfs_path=Path("/sys/test-wired"),
+            interface=0,
+            vendor_id=0x1B1C,
+            product_id=0x0A6A,
+            serial="HEADSET",
+            product="HS80 Headset",
+            readable=False,
+            writable=False,
+        )
+
+        class NoHeadsetTransport(FakeTransport):
+            def read_resource(self, _resource: bytes, timeout_ms: int = 1000) -> bytes:
+                del timeout_ms
+                raise DeviceStatusError(RECEIVER_TARGET, bytes((0x08, 0x01)), 0x02)
+
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: node,
+                transport_factory=lambda _node, _callback: NoHeadsetTransport(),  # type: ignore[arg-type]
+                wired_finder=lambda: wired,
+            )
+            controller.start()
+            deadline = time.monotonic() + 1
+            while not controller.snapshot().receiver_connected and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+            state = controller.snapshot()
+            self.assertTrue(state.wired_headset_present)
+            self.assertFalse(state.headset_connected)
+            self.assertEqual(WIRED_HEADSET_MESSAGE, state.last_error)
+            controller.stop()
+
+    def test_missing_receiver_points_at_the_cable_when_one_is_plugged(self) -> None:
+        wired = HidNode(
+            path=Path("/dev/hidraw-wired"),
+            sysfs_path=Path("/sys/test-wired"),
+            interface=0,
+            vendor_id=0x1B1C,
+            product_id=0x0A6A,
+            serial="HEADSET",
+            product="HS80 Headset",
+            readable=False,
+            writable=False,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: None,
+                wired_finder=lambda: wired,
+            )
+            controller.start()
+            deadline = time.monotonic() + 1
+            while controller.snapshot().last_error == "" and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+            state = controller.snapshot()
+            self.assertFalse(state.receiver_connected)
+            self.assertTrue(state.wired_headset_present)
+            self.assertEqual(RECEIVER_MISSING_WIRED_MESSAGE, state.last_error)
+            controller.stop()
+
+    def test_without_a_cable_the_receiver_message_stays_plain(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: None,
+                wired_finder=lambda: None,
+            )
+            controller.start()
+            deadline = time.monotonic() + 1
+            while controller.snapshot().last_error == "" and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+            state = controller.snapshot()
+            self.assertFalse(state.wired_headset_present)
+            self.assertEqual(RECEIVER_MISSING_MESSAGE, state.last_error)
             controller.stop()
 
     def test_active_probe_skips_rejected_channel_and_finds_later_hs80(self) -> None:

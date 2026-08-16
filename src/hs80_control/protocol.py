@@ -15,6 +15,10 @@ from typing import Final, Literal
 VENDOR_ID: Final = 0x1B1C
 RECEIVER_PRODUCT_ID: Final = 0x0A6B
 SUPPORTED_HEADSET_PRODUCT_IDS: Final = frozenset({0x0A69, 0x0A71})
+# The headset's own USB id, seen only while it hangs on the charging cable.
+# That interface carries vendor page 0xff58 and the consumer controls, not the
+# 0xff42 control protocol, so it is detected for diagnostics but never driven.
+WIRED_HEADSET_PRODUCT_ID: Final = 0x0A6A
 
 CONTROL_INTERFACE: Final = 3
 VENDOR_USAGE_PAGE: Final = 0xFF42

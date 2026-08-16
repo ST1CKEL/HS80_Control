@@ -20,6 +20,9 @@ class DeviceState:
     charging: int = -1
     microphone_muted: int = -1
     hid_path: str = ""
+    # True while the headset itself sits on USB. It charges there and offers
+    # no audio or control protocol, so this only ever explains the state.
+    wired_headset_present: bool = False
     last_error: str = ""
     rgb_mode: str = "static"
     rgb_brightness: int = 100
