@@ -223,6 +223,10 @@ class HS80Service(ServiceInterface):
         return bool(await self._call(self.controller.refresh))
 
     @method()
+    async def Reconnect(self) -> "b":
+        return bool(await self._call(self.controller.reconnect))
+
+    @method()
     async def SetRgb(
         self,
         mode: "s",

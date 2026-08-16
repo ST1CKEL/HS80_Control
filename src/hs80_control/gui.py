@@ -188,6 +188,15 @@ class HS80Window(Adw.ApplicationWindow):
         self.refresh_button.connect("clicked", self._refresh)
         self.header.pack_end(self.refresh_button)
 
+        self.reconnect_button = Gtk.Button.new_from_icon_name(
+            "network-wireless-symbolic"
+        )
+        self.reconnect_button.set_tooltip_text(
+            "Funkverbindung neu aufbauen und Headset suchen"
+        )
+        self.reconnect_button.connect("clicked", self._reconnect)
+        self.header.pack_end(self.reconnect_button)
+
         about_action = Gio.SimpleAction.new("about", None)
         about_action.connect("activate", self._show_about)
         self.add_action(about_action)
@@ -879,6 +888,32 @@ class HS80Window(Adw.ApplicationWindow):
             None,
             show_result=False,
             always=lambda: self.refresh_button.set_sensitive(True),
+        )
+
+    def _reconnect(self, _button: Gtk.Button) -> None:
+        self.reconnect_button.set_sensitive(False)
+
+        def finished(success: bool, applied: bool) -> None:
+            if not success:
+                # _call already reported the D-Bus error in a toast.
+                return
+            self.toast_overlay.add_toast(
+                Adw.Toast(
+                    title=(
+                        "Headset verbunden"
+                        if applied
+                        else "Kein Headset gefunden - eingeschaltet und in Reichweite?"
+                    ),
+                    timeout=5,
+                )
+            )
+
+        self._call(
+            "Reconnect",
+            None,
+            callback=finished,
+            show_result=False,
+            always=lambda: self.reconnect_button.set_sensitive(True),
         )
 
     def _quick_rgb_off(self, _button: Gtk.Button) -> None:

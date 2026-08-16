@@ -176,6 +176,9 @@ class DeviceController:
     def refresh(self) -> bool:
         return bool(self._submit("refresh"))
 
+    def reconnect(self) -> bool:
+        return bool(self._submit("reconnect"))
+
     def set_rgb(
         self,
         mode: str,
@@ -327,6 +330,8 @@ class DeviceController:
     def _execute(self, operation: str, arguments: tuple[object, ...]) -> object:
         if operation == "refresh":
             return self._refresh_all()
+        if operation == "reconnect":
+            return self._reconnect()
         if operation == "rgb":
             return self._set_rgb(*arguments)
         if operation == "rgb_patch":
@@ -340,6 +345,17 @@ class DeviceController:
         if operation == "mic_mute":
             return self._set_microphone_muted(bool(arguments[0]))
         raise ControllerError(f"unsupported operation: {operation}")
+
+    def _reconnect(self) -> bool:
+        # The receiver only reports a headset that is awake on its radio, and
+        # it caches that answer until the next probe. Dropping the whole HID
+        # session forces a fresh link negotiation instead of waiting out the
+        # heartbeat, which is what a user wants right after switching the
+        # headset on. Rediscovery is rescheduled exactly as _tick would.
+        self._disconnect(graceful=True)
+        self._try_connect()
+        self._next_discovery = time.monotonic() + 2.0
+        return self.state.snapshot().headset_connected
 
     def _try_connect(self) -> None:
         node = self._node_finder()

@@ -368,6 +368,115 @@ class ControllerTests(unittest.TestCase):
             self.assertEqual(NO_HEADSET_MESSAGE, state.last_error)
             controller.stop()
 
+    def test_reconnect_rebuilds_the_session_and_finds_a_woken_headset(self) -> None:
+        node = HidNode(
+            path=Path("/dev/hidraw-test"),
+            sysfs_path=Path("/sys/test"),
+            interface=3,
+            vendor_id=0x1B1C,
+            product_id=0x0A6B,
+            serial="RECEIVER",
+            product="HS80 Receiver",
+            readable=True,
+            writable=True,
+        )
+        powered = {"on": False}
+        created: list[FakeTransport] = []
+
+        class WakeableTransport(FakeTransport):
+            """Reports a headset on channel 1 only once it is switched on."""
+
+            def read_resource(self, _resource: bytes, timeout_ms: int = 1000) -> bytes:
+                del timeout_ms
+                raise DeviceStatusError(RECEIVER_TARGET, bytes((0x08, 0x01)), 0x02)
+
+            def transfer(
+                self,
+                target: int,
+                command: bytes,
+                payload: bytes = b"",
+                timeout_ms: int = 1000,
+            ) -> bytes:
+                response = bytearray(super().transfer(target, command, payload, timeout_ms))
+                if target == RECEIVER_TARGET and command == CMD_SUBDEVICE_BITFIELD:
+                    response[4] = 0x02 if powered["on"] else 0x00
+                elif target == 0x09 and command == CMD_VENDOR_ID:
+                    response[4:6] = (0x1B1C).to_bytes(2, "little")
+                elif target == 0x09 and command == CMD_PRODUCT_ID:
+                    response[4:6] = (0x0A69).to_bytes(2, "little")
+                return bytes(response)
+
+        def factory(_node: HidNode, _callback: object) -> FakeTransport:
+            transport = WakeableTransport()
+            created.append(transport)
+            return transport
+
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: node,
+                transport_factory=factory,  # type: ignore[arg-type]
+            )
+            controller.start()
+            deadline = time.monotonic() + 1
+            while not controller.snapshot().receiver_connected and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertFalse(controller.snapshot().headset_connected)
+            self.assertEqual(NO_HEADSET_MESSAGE, controller.snapshot().last_error)
+
+            powered["on"] = True
+            self.assertTrue(controller.reconnect())
+
+            state = controller.snapshot()
+            self.assertTrue(state.headset_connected)
+            self.assertEqual("4.5.6", state.firmware)
+            self.assertEqual("", state.last_error)
+            # The stale session must be torn down, not leaked alongside the new one.
+            self.assertEqual(2, len(created))
+            self.assertTrue(created[0].closed)
+            self.assertFalse(created[1].closed)
+            controller.stop()
+
+    def test_reconnect_reports_a_headset_that_stays_off(self) -> None:
+        node = HidNode(
+            path=Path("/dev/hidraw-test"),
+            sysfs_path=Path("/sys/test"),
+            interface=3,
+            vendor_id=0x1B1C,
+            product_id=0x0A6B,
+            serial="RECEIVER",
+            product="HS80 Receiver",
+            readable=True,
+            writable=True,
+        )
+
+        class NoHeadsetTransport(FakeTransport):
+            def read_resource(self, _resource: bytes, timeout_ms: int = 1000) -> bytes:
+                del timeout_ms
+                raise DeviceStatusError(RECEIVER_TARGET, bytes((0x08, 0x01)), 0x02)
+
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: node,
+                transport_factory=lambda _node, _callback: NoHeadsetTransport(),  # type: ignore[arg-type]
+            )
+            controller.start()
+            deadline = time.monotonic() + 1
+            while not controller.snapshot().receiver_connected and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+            self.assertFalse(controller.reconnect())
+            state = controller.snapshot()
+            self.assertTrue(state.receiver_connected)
+            self.assertFalse(state.headset_connected)
+            self.assertEqual(NO_HEADSET_MESSAGE, state.last_error)
+            controller.stop()
+
     def test_active_probe_skips_rejected_channel_and_finds_later_hs80(self) -> None:
         class MultipleEndpointTransport(FakeTransport):
             def transfer(
