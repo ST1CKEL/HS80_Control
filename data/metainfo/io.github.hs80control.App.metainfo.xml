@@ -33,8 +33,29 @@
     <binary>hs80-control</binary>
     <binary>hs80ctl</binary>
     <modalias>usb:v1B1Cp0A6Bd*</modalias>
+    <modalias>usb:v1B1Cp0A69d*</modalias>
   </provides>
   <releases>
+    <release version="0.3.1" date="2026-08-16">
+      <description>
+        <p>Backs off instead of probing an unresponsive headset every two seconds.</p>
+      </description>
+    </release>
+    <release version="0.3.0" date="2026-08-16">
+      <description>
+        <p>Adds full support for the headset connected directly by USB cable, without the wireless receiver: battery, firmware, microphone state, lighting, sidetone and microphone gain.</p>
+      </description>
+    </release>
+    <release version="0.2.3" date="2026-08-16">
+      <description>
+        <p>Recognises a headset charging on its USB cable and explains that sound and controls run over the wireless receiver only.</p>
+      </description>
+    </release>
+    <release version="0.2.2" date="2026-08-16">
+      <description>
+        <p>Adds a reconnect button that rebuilds the receiver link and searches for the headset, and explains why no headset was found instead of leaving the status blank.</p>
+      </description>
+    </release>
     <release version="0.2.1" date="2026-08-15">
       <description>
         <p>Fix the narrow-window switcher bar on libadwaita 1.9 and add system requirements, interface documentation and screenshots.</p>

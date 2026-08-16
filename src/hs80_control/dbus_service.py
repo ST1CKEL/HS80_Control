@@ -29,6 +29,8 @@ _STATE_TO_DBUS = {
     "charging": "Charging",
     "microphone_muted": "MicrophoneMuted",
     "hid_path": "HidPath",
+    "connection_mode": "ConnectionMode",
+    "wired_headset_present": "WiredHeadsetPresent",
     "last_error": "LastError",
     "rgb_mode": "RgbMode",
     "rgb_brightness": "RgbBrightness",
@@ -151,6 +153,14 @@ class HS80Service(ServiceInterface):
         return self.controller.snapshot().hid_path
 
     @dbus_property(access=PropertyAccess.READ)
+    def ConnectionMode(self) -> "s":
+        return self.controller.snapshot().connection_mode
+
+    @dbus_property(access=PropertyAccess.READ)
+    def WiredHeadsetPresent(self) -> "b":
+        return self.controller.snapshot().wired_headset_present
+
+    @dbus_property(access=PropertyAccess.READ)
     def LastError(self) -> "s":
         return self.controller.snapshot().last_error
 
@@ -221,6 +231,10 @@ class HS80Service(ServiceInterface):
     @method()
     async def Refresh(self) -> "b":
         return bool(await self._call(self.controller.refresh))
+
+    @method()
+    async def Reconnect(self) -> "b":
+        return bool(await self._call(self.controller.reconnect))
 
     @method()
     async def SetRgb(

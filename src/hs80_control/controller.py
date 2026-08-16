@@ -14,7 +14,7 @@ from typing import Callable
 
 from .alsa import AlsaMixer, MixerError
 from .config import ConfigStore, RGB_MODES
-from .discovery import HidNode, find_control_node
+from .discovery import HidNode, find_control_node, find_wired_headset
 from .hidapi import HidApi
 from .protocol import (
     CMD_BATTERY,
@@ -34,6 +34,8 @@ from .protocol import (
     CMD_VENDOR_ID,
     RECEIVER_TARGET,
     SUPPORTED_HEADSET_PRODUCT_IDS,
+    USB_HEADSET_PRODUCT_ID,
+    USB_HEADSET_TARGET,
     VENDOR_ID,
     DeviceEvent,
     PairedDevice,
@@ -55,6 +57,28 @@ from .transport import DeviceStatusError, HidTransport
 
 
 LOG = logging.getLogger(__name__)
+
+# A healthy receiver that reports an empty subdevice bitfield is the normal
+# picture for a headset that is switched off. Saying so beats leaving the
+# status blank, which reads like the software simply gave up.
+NO_HEADSET_MESSAGE = (
+    "receiver reports no connected headset; switch the HS80 on, "
+    "charge it, or move it closer to the receiver"
+)
+
+# The cable carries power, the volume keys and a firmware-update endpoint --
+# no audio class interface and no 0xff42 control page. Telling the user that
+# beats repeating "switch it on" at a headset that is plainly powered.
+WIRED_HEADSET_MESSAGE = (
+    "headset is charging on its USB cable; sound and controls run over the "
+    "receiver only, so unplug the cable once it has charged"
+)
+
+RECEIVER_MISSING_MESSAGE = "HS80 receiver not found"
+RECEIVER_MISSING_WIRED_MESSAGE = (
+    "HS80 receiver not found; the headset is on its USB cable, which charges "
+    "it but carries no audio -- plug the wireless receiver back in"
+)
 
 
 class ControllerError(RuntimeError):
@@ -89,6 +113,7 @@ class DeviceController:
         state: StateStore | None = None,
         node_finder: NodeFinder = find_control_node,
         transport_factory: TransportFactory = _default_transport_factory,
+        wired_finder: NodeFinder = find_wired_headset,
     ) -> None:
         self.config = config or ConfigStore()
         settings = self.config.snapshot()
@@ -109,6 +134,7 @@ class DeviceController:
         self.spatial = spatial or SpatialManager(self.config)
         self._node_finder = node_finder
         self._transport_factory = transport_factory
+        self._wired_finder = wired_finder
         self._transport: HidTransport | None = None
         self._node: HidNode | None = None
         self._headset: PairedDevice | None = None
@@ -120,6 +146,7 @@ class DeviceController:
         self._accepting = threading.Event()
         self._thread: threading.Thread | None = None
         self._spatial_lock = threading.RLock()
+        self._connect_failures = 0
         self._next_discovery = 0.0
         self._next_heartbeat = 0.0
         self._next_animation = 0.0
@@ -167,6 +194,9 @@ class DeviceController:
 
     def refresh(self) -> bool:
         return bool(self._submit("refresh"))
+
+    def reconnect(self) -> bool:
+        return bool(self._submit("reconnect"))
 
     def set_rgb(
         self,
@@ -257,7 +287,17 @@ class DeviceController:
         now = time.monotonic()
         if self._transport is None and now >= self._next_discovery:
             self._try_connect()
-            self._next_discovery = now + 2.0
+            # A device that stops answering must not be hammered every two
+            # seconds: repeated probing was observed to keep the HS80's
+            # control interface wedged. Back off, but stay responsive to a
+            # headset that simply came back.
+            if self._transport is None:
+                self._connect_failures += 1
+                delay = min(2.0 * 2 ** min(self._connect_failures - 1, 4), 30.0)
+            else:
+                self._connect_failures = 0
+                delay = 2.0
+            self._next_discovery = time.monotonic() + delay
 
         self._process_one_request()
         now = time.monotonic()
@@ -319,6 +359,8 @@ class DeviceController:
     def _execute(self, operation: str, arguments: tuple[object, ...]) -> object:
         if operation == "refresh":
             return self._refresh_all()
+        if operation == "reconnect":
+            return self._reconnect()
         if operation == "rgb":
             return self._set_rgb(*arguments)
         if operation == "rgb_patch":
@@ -333,14 +375,79 @@ class DeviceController:
             return self._set_microphone_muted(bool(arguments[0]))
         raise ControllerError(f"unsupported operation: {operation}")
 
+    def _reconnect(self) -> bool:
+        # The receiver only reports a headset that is awake on its radio, and
+        # it caches that answer until the next probe. Dropping the whole HID
+        # session forces a fresh link negotiation instead of waiting out the
+        # heartbeat, which is what a user wants right after switching the
+        # headset on. Rediscovery is rescheduled exactly as _tick would.
+        self._disconnect(graceful=True)
+        # An explicit reconnect is the user overriding the backoff.
+        self._connect_failures = 0
+        self._try_connect()
+        self._next_discovery = time.monotonic() + 2.0
+        return self.state.snapshot().headset_connected
+
+    def _is_usb_mode(self) -> bool:
+        return self.state.snapshot().connection_mode == "usb"
+
+    def _connect_usb_headset(self, node: HidNode) -> None:
+        # Plugged in and switched on, the headset is the whole device: it
+        # answers on the receiver target and rejects 0x09, so there is no
+        # paired-device list to walk and no receiver to report.
+        self._headset = PairedDevice(
+            vendor_id=VENDOR_ID,
+            product_id=USB_HEADSET_PRODUCT_ID,
+            device_type=0,
+            endpoint=USB_HEADSET_TARGET,
+            serial=node.serial,
+        )
+        self._headset_software_mode = False
+        self._receiver_software_mode = False
+        self.state.update(
+            connection_mode="usb",
+            receiver_connected=False,
+            receiver_firmware="",
+            serial=node.serial,
+            last_error="",
+        )
+        if hasattr(self.mixer, "bind_serial"):
+            self.mixer.bind_serial(node.serial)
+            self._refresh_mixer()
+        try:
+            self._initialize_headset()
+        except (DeviceStatusError, ProtocolError, ControllerError) as exc:
+            self.state.update(headset_connected=False, last_error=str(exc))
+        self._next_heartbeat = time.monotonic() + 10.0
+
+    def _refresh_wired_state(self) -> bool:
+        try:
+            present = self._wired_finder() is not None
+        except OSError:
+            # sysfs went away mid-scan; keep the previous answer rather than
+            # claiming the cable was pulled.
+            return self.state.snapshot().wired_headset_present
+        self.state.update(wired_headset_present=present)
+        return present
+
+    def _headset_absence_message(self) -> str:
+        if self.state.snapshot().wired_headset_present:
+            return WIRED_HEADSET_MESSAGE
+        return NO_HEADSET_MESSAGE
+
     def _try_connect(self) -> None:
+        wired = self._refresh_wired_state()
         node = self._node_finder()
         if node is None:
             self.state.update(
                 receiver_connected=False,
                 headset_connected=False,
                 hid_path="",
-                last_error="HS80 receiver not found",
+                last_error=(
+                    RECEIVER_MISSING_WIRED_MESSAGE
+                    if wired
+                    else RECEIVER_MISSING_MESSAGE
+                ),
             )
             return
         self.state.update(
@@ -361,8 +468,12 @@ class DeviceController:
             transport = self._transport_factory(node, self._handle_event)
             self._transport = transport
             self._node = node
+            if node.product_id == USB_HEADSET_PRODUCT_ID:
+                self._connect_usb_headset(node)
+                return
             receiver_fw = transport.transfer(RECEIVER_TARGET, CMD_FIRMWARE)
             self.state.update(
+                connection_mode="wireless",
                 receiver_connected=True,
                 receiver_firmware=parse_receiver_firmware(receiver_fw),
                 last_error="",
@@ -400,7 +511,7 @@ class DeviceController:
                     last_error=(
                         f"no supported paired HS80 found (reported: {product_ids})"
                         if product_ids
-                        else ""
+                        else self._headset_absence_message()
                     ),
                 )
                 self._next_heartbeat = time.monotonic() + 2.0
@@ -453,7 +564,12 @@ class DeviceController:
     def _initialize_headset(self) -> None:
         transport, headset = self._require_transport_and_headset(require_online=False)
         try:
-            transport.transfer(headset.endpoint, CMD_HEARTBEAT)
+            # The directly attached headset does not implement the wireless
+            # keep-alive: 0x12 goes unanswered there and was observed to reset
+            # the device, taking the control interface down with it. Firmware
+            # is the liveness probe in that mode.
+            if not self._is_usb_mode():
+                transport.transfer(headset.endpoint, CMD_HEARTBEAT)
             firmware = transport.transfer(headset.endpoint, CMD_FIRMWARE)
             transport.transfer(headset.endpoint, CMD_SOFTWARE_MODE)
             self._headset_software_mode = True
@@ -491,8 +607,29 @@ class DeviceController:
                     self._headset_software_mode = False
             raise
 
+    def _usb_heartbeat(self) -> None:
+        # No 0x12 in this mode. Reading the battery keeps the session honest
+        # and refreshes a value the user actually sees.
+        transport, headset = self._transport, self._headset
+        if transport is None or headset is None:
+            return
+        try:
+            battery = transport.transfer(headset.endpoint, CMD_BATTERY)
+            microphone = transport.transfer(headset.endpoint, CMD_MIC_STATUS)
+        except (OSError, ProtocolError, ControllerError) as exc:
+            self._record_error(exc)
+            self._disconnect(graceful=False)
+            return
+        self.state.update(
+            battery_percent=parse_battery_percent(battery),
+            microphone_muted=int(parse_microphone_muted(microphone)),
+        )
+
     def _heartbeat(self) -> None:
         if self._transport is None:
+            return
+        if self._is_usb_mode():
+            self._usb_heartbeat()
             return
         try:
             self._transport.transfer(RECEIVER_TARGET, CMD_HEARTBEAT)
@@ -509,7 +646,11 @@ class DeviceController:
                 self._disconnect(graceful=False)
                 return
             if self._headset is None:
-                self.state.update(headset_connected=False, last_error="")
+                self._refresh_wired_state()
+                self.state.update(
+                    headset_connected=False,
+                    last_error=self._headset_absence_message(),
+                )
                 return
             self._headset_software_mode = False
             self.state.update(serial=self._headset.serial)
@@ -801,7 +942,9 @@ class DeviceController:
         self._receiver_software_mode = False
         self._headset_software_mode = False
         self._rgb_endpoint_open = False
-        self.state.update(receiver_connected=False, headset_connected=False)
+        self.state.update(
+            connection_mode="", receiver_connected=False, headset_connected=False
+        )
 
     def _record_error(self, error: BaseException) -> None:
         message = str(error) or type(error).__name__

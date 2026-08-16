@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import ctypes
 from ctypes.util import find_library
+import os
 from pathlib import Path
 import threading
 
 
 class HidApiError(OSError):
     """A hidapi operation failed."""
+
+
+# hidapi formats its device error as strerror(errno), so a call that fails
+# without touching errno reports "Success". Treat those as no detail at all
+# and fall back to the errno ctypes captured for the failing call.
+_UNINFORMATIVE_ERRORS = frozenset({"", "success", "no error"})
 
 
 class HidApi:
@@ -28,7 +35,9 @@ class HidApi:
         library_name = find_library("hidapi-hidraw")
         if not library_name:
             raise HidApiError("libhidapi-hidraw.so was not found")
-        self.lib = ctypes.CDLL(library_name)
+        # use_errno lets _error() report the errno of the failing syscall when
+        # hidapi's own message turns out to be useless.
+        self.lib = ctypes.CDLL(library_name, use_errno=True)
 
         self.lib.hid_init.argtypes = []
         self.lib.hid_init.restype = ctypes.c_int
@@ -69,8 +78,17 @@ class HidHandle:
         self._closed = False
 
     def _error(self, operation: str) -> HidApiError:
-        detail = self._api.lib.hid_error(self._pointer)
-        return HidApiError(f"{operation} failed on {self.path}: {detail or 'unknown hidapi error'}")
+        # Read errno first: hid_error() is itself a call on the same CDLL and
+        # would overwrite the value ctypes saved for the failed operation.
+        errno = ctypes.get_errno()
+        detail = (self._api.lib.hid_error(self._pointer) or "").strip()
+        if detail.lower() in _UNINFORMATIVE_ERRORS:
+            detail = (
+                f"{os.strerror(errno)} (errno {errno})"
+                if errno
+                else "no detail reported and errno unset; the device may have gone away"
+            )
+        return HidApiError(f"{operation} failed on {self.path}: {detail}")
 
     def write(self, data: bytes) -> int:
         if self._closed:

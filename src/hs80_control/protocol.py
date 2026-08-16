@@ -15,6 +15,13 @@ from typing import Final, Literal
 VENDOR_ID: Final = 0x1B1C
 RECEIVER_PRODUCT_ID: Final = 0x0A6B
 SUPPORTED_HEADSET_PRODUCT_IDS: Final = frozenset({0x0A69, 0x0A71})
+# The headset's own USB ids. Switched off it charges as 0x0a6a with a single
+# HID interface and no audio. Switched on it re-enumerates as 0x0a69 with three
+# audio interfaces plus control interface 3, carrying the same 0xff42 page as
+# the receiver -- and it answers on target 0x08, rejecting 0x09 with 0x06.
+WIRED_HEADSET_PRODUCT_ID: Final = 0x0A6A
+USB_HEADSET_PRODUCT_ID: Final = 0x0A69
+USB_HEADSET_TARGET: Final = 0x08
 
 CONTROL_INTERFACE: Final = 3
 VENDOR_USAGE_PAGE: Final = 0xFF42

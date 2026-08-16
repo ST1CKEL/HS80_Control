@@ -83,12 +83,52 @@ eindeutigen Fehlermeldung ab.
 - ALSA-Aufnahmestummschaltung
 - optionales binaurales PipeWire-7.1 mit einer SOFA-HRTF
 - sichere Hotplug-, Standby- und Wiederverbindungsbehandlung
+- Reconnect auf Knopfdruck, baut die Receiver-Sitzung neu auf und sucht das
+  Headset
+- erkennt ein Headset am USB-Ladekabel und erklärt, warum darüber kein Ton
+  läuft
 
 Audio und Mikrofon bleiben beim Kernelmodul `snd-usb-audio`. Der Dienst öffnet
 nur HID-Interface 3 und trennt keine USB- oder Audio-Treiber.
 
-Nicht implementiert sind Pairing und Firmware-Updates. Diese Befehle werden
-absichtlich nicht angeboten.
+### Reconnect statt Pairing
+
+Der Reconnect in der Kopfleiste und `hs80ctl reconnect` verwerfen die
+bestehende HID-Sitzung, öffnen den Receiver neu und fragen die aktiven
+Funkkanäle erneut ab. Das ist der richtige Griff, wenn das Headset erst nach
+dem Start des Dienstes eingeschaltet wurde oder die Sitzung hängt, und wirkt
+sofort statt erst beim nächsten Heartbeat.
+
+Es ist ausdrücklich **kein** erneutes Funk-Pairing: Receiver und Headset
+werden ab Werk gekoppelt ausgeliefert, und der dafür nötige Befehl ist in
+keiner der in [docs/PROTOCOL.md](docs/PROTOCOL.md) genannten Quellen
+dokumentiert. Ein echtes Neukoppeln bleibt iCUE vorbehalten. Pairing und
+Firmware-Updates werden deshalb weiterhin absichtlich nicht angeboten.
+
+### Betrieb am USB-Kabel
+
+Das Headset meldet sich am Kabel je nach Zustand als **zwei verschiedene
+Geräte**:
+
+| Zustand | USB-ID | Schnittstellen | Audio | Steuerung |
+| --- | --- | --- | --- | --- |
+| eingeschaltet | `1b1c:0a69` | 4 | ja, eigene ALSA-Karte | ja, `0xff42` |
+| ausgeschaltet | `1b1c:0a6a` | 1 | nein | nein |
+
+Eingeschaltet läuft alles ohne Dongle: Ton, Akku, Firmware, Mikrofonstatus,
+RGB, Sidetone und Mikrofonverstärkung. Der Dienst bevorzugt dieses Gerät, wenn
+Kabel und Receiver gleichzeitig stecken. Die udev-Regel gibt dafür zusätzlich
+`0a69` Interface 3 frei; Audio bleibt unangetastet bei `snd-usb-audio`.
+
+Ausgeschaltet lädt das Headset nur. Es bietet dann eine einzige
+HID-Schnittstelle bei 150 mA mit Vendor-Page `0xff58` und den Lautstärketasten,
+aber keine Audioklasse und kein `0xff42`. Die App erkennt auch diesen Zustand
+und benennt ihn, statt bloß „offline" zu melden.
+
+Ein Detail aus der Messung: Der Heartbeat `12` wird im Direktbetrieb nicht
+beantwortet und brachte das Gerät bei Wiederholung zum Zurücksetzen. Der Dienst
+sendet ihn dort deshalb nicht — Einzelheiten in
+[docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ## Voraussetzungen
 
@@ -209,6 +249,7 @@ In einem zweiten Terminal können Befehle ausgeführt werden:
 
 ```bash
 ./bin/hs80ctl status
+./bin/hs80ctl reconnect
 ./bin/hs80ctl rgb off
 ./bin/hs80ctl rgb static --brightness 35 --logo '#00bfff'
 ./bin/hs80ctl sidetone on --db -20
