@@ -33,8 +33,14 @@
     <binary>hs80-control</binary>
     <binary>hs80ctl</binary>
     <modalias>usb:v1B1Cp0A6Bd*</modalias>
+    <modalias>usb:v1B1Cp0A69d*</modalias>
   </provides>
   <releases>
+    <release version="0.3.1" date="2026-08-16">
+      <description>
+        <p>Backs off instead of probing an unresponsive headset every two seconds.</p>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-08-16">
       <description>
         <p>Adds full support for the headset connected directly by USB cable, without the wireless receiver: battery, firmware, microphone state, lighting, sidetone and microphone gain.</p>
