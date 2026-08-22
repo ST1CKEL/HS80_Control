@@ -65,7 +65,7 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 
 %files
 %license LICENSE LICENSE.CC0
-%doc NOTICE README.md docs/ARCHITECTURE.md docs/PROTOCOL.md
+%doc NOTICE README.md docs/ARCHITECTURE.md docs/CLI_REFERENCE.md docs/PROTOCOL.md docs/SPATIAL_AUDIO.md
 %{_bindir}/hs80-control
 %{_bindir}/hs80ctl
 %{_libexecdir}/hs80d

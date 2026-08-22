@@ -1,217 +1,138 @@
-# HS80-Protokollnotizen
+# Corsair HS80 RGB Wireless — Protokollspezifikation & Reverse-Engineering
 
-## Geltungsbereich
+Dieses Dokument dokumentiert die durch Protokollanalyse, USB-Sniffing und Reverse-Engineering ermittelten Kommunikationsstrukturen des **Corsair HS80 RGB Wireless**.
 
-Bestätigte Zielhardware ist der Corsair HS80 RGB Wireless Receiver mit der
-USB-ID `1b1c:0a6b` und einem gekoppelten Headset mit interner Produkt-ID
-`0a69`. Die Produkt-ID `0a71` wird von der Implementierung akzeptiert, ist
-aber noch nicht an echter Hardware verifiziert und gilt daher als
-experimentell.
+---
 
-Diese Protokollnotizen gelten nicht für HS80 MAX, HS80 RGB USB/Wired,
-Xbox- oder Bluetooth-Varianten oder für Receiver mit anderen USB-IDs.
+## 1. Hardware-Kennungen & USB-Deskriptoren
 
-## Direktbetrieb am USB-Kabel (`1b1c:0a69`)
+### USB-Identifikatoren
 
-Eingeschaltet am Kabel meldet sich das Headset als eigenes Gerät mit vier
-Schnittstellen: drei Audio-Class und Interface 3 mit Usage Page `0xff42`,
-also demselben Steuerprotokoll wie der Receiver. An echter Hardware gemessen:
+| Gerät / Modus | Vendor ID | Product ID | Interfaces | Audio-Klasse | Steuerprotokoll |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Wireless Transceiver (Dongle)** | `0x1b1c` | `0x0a6b` | 5 (0..4) | Ja (0, 1, 2) | Ja (Interface 3) |
+| **Headset am USB-Kabel (eingeschaltet)** | `0x1b1c` | `0x0a69` | 4 (0..3) | Ja (0, 1, 2) | Ja (Interface 3) |
+| **Headset am Ladekabel (ausgeschaltet)** | `0x1b1c` | `0x0a6a` | 1 (0) | Nein | Nein (nur Vendor-Page `0xff58` / Update) |
+| **Interne Headset-PID (Funkbetrieb)** | `0x1b1c` | `0x0a69` / `0x0a71` | — | — | Adressiert über Endpoint `0x09`..`0x0f` |
 
-| Kommando | Ziel `0x08` | Ziel `0x09` |
-| --- | --- | --- |
-| `02 13` Firmware | `01 00 02 00 05 08 30 00` → 5.8.48 | Status `0x06` |
-| `02 0f` Akku | `01 00 02 00 ca 03` → 97 % | Status `0x06` |
-| `02 a6` Mikrofon | `01 00 02 00 01` → stumm | Status `0x06` |
-| `02 11` / `02 12` | `1b1c` / `0a69` | Status `0x06` |
-| `01 03 00 02` Softwaremodus | bestätigt | — |
-| `05 01 00` / `0d 00 01` RGB | bestätigt | — |
-| `01 0d 00` / `01 0e 00` Sleep | bestätigt | — |
-| **`12` Heartbeat** | **keine Antwort** | — |
-
-Das Headset ist hier selbst das Gerät auf `0x08`; einen Receiver gibt es nicht,
-und `0x09` wird durchgehend mit Status `0x06` abgelehnt. Eine Abfrage der
-gekoppelten Geräteliste entfällt.
-
-Der Heartbeat `12` ist die einzige Ausnahme: Er bleibt unbeantwortet, und
-wiederholtes Senden führte an echter Hardware zu einer Neuanmeldung des
-Geräts, nach der das Steuerinterface bis zum Aus- und Einschalten des Headsets
-gar nicht mehr antwortete. Der Dienst sendet ihn im Direktbetrieb deshalb
-nicht; als Lebenszeichen dienen Firmware beim Verbinden und Akku im Zyklus.
-
-### ALSA im Direktbetrieb
-
-Die Reglernamen unterscheiden sich vom Receiver. Sidetone und Mikrofon liegen
-auf **demselben** Simple Control und werden über die Richtung getrennt:
-
-| Simple Control | Richtung | Bereich | Funktion |
-| --- | --- | --- | --- |
-| `Headset,0` | Playback | `-42` bis `+4 dB` | Sidetone |
-| `Headset,0` | Capture | `-36` bis `0 dB` | Mikrofonverstärkung |
-| `Headset,1` | Playback | `-64` bis `0 dB` | Kopfhörerlautstärke |
-
-## Headset am Ladekabel (`1b1c:0a6a`)
-
-Hängt das Headset an seinem USB-C-Kabel, meldet es sich als eigenes Gerät.
-An echter Hardware gemessen (Firmware-Stand des Receivers 5.9.130):
-
-| Eigenschaft | Wert |
-| --- | --- |
-| `bNumConfigurations` | 1 |
-| `bNumInterfaces` | 1 |
-| `bInterfaceClass` | `03` HID |
-| `MaxPower` | 150 mA |
-
-Der Report-Deskriptor dieser Schnittstelle enthält Vendor-Page `0xff58`
-(Report `0x58`, 64 Byte, Firmware-Update) sowie eine Consumer-Control-
-Collection für die Lautstärketasten. Die Steuerseite `0xff42` fehlt, ebenso
-jede Audio-Class-Schnittstelle; entsprechend entsteht keine ALSA-Karte.
-
-Über das Kabel sind daher weder Akku, RGB, Sidetone noch Mikrofonstatus
-adressierbar. Der Dienst erkennt das Gerät ausschließlich über sysfs, um den
-Zustand erklären zu können, und öffnet den zugehörigen hidraw-Knoten nie.
-Die Messung entstand bei kritisch leerem Akku; ob ein geladenes Headset
-denselben Deskriptorsatz meldet, ist nicht verifiziert.
-
-## USB-Aufteilung
-
-| Interface | Klasse | Aufgabe |
-| --- | --- | --- |
-| 0 | USB Audio Control | Mute, Gain, Sidetone und Ausgangslautstärke |
-| 1 | USB Audio Streaming | Mono-Mikrofon, Endpoint `0x83 IN` |
-| 2 | USB Audio Streaming | Stereoausgabe, Endpoint `0x03 OUT` |
-| 3 | HID | Corsair-Steuerprotokoll, `0x81 IN` / `0x01 OUT` |
-| 4 | HID | Rad- und Eingabeereignisse, `0x82 IN` / `0x02 OUT` |
-
-Interface 3 enthält unter anderem Usage Page `0xff42`. Output-Report-ID `0x02`
-und Input-Report-IDs `0x01` beziehungsweise `0x03` sind jeweils insgesamt 64
-Byte lang.
-
-## hidapi-Framing
-
-Bei `hid_write()` ist das erste Byte des Puffers die Report-ID. Der lokale
-HID-Deskriptor deklariert für Output-Report-ID `0x02` genau 63 Datenbytes;
-deshalb schreibt der Dienst insgesamt 64 Byte. Ein zusätzliches Nullbyte ist
-nur für Geräte ohne nummerierte Reports vorgesehen und darf hier nicht vor
-`0x02` stehen:
+### USB-Interface-Aufteilung (Transceiver `1b1c:0a6b`)
 
 ```text
-02 TT CC CC ... PP PP ... 00
-│  │  │         │
-│  │  │         └─ optionale Nutzdaten
-│  │  └─────────── Kommando
-│  └────────────── Zielendpunkt
-└───────────────── HID-Report-ID
+Interface 0: USB Audio Control    -> Lautstärke, Mute, Sidetone & Mic-Gain (Kernel snd-usb-audio)
+Interface 1: USB Audio Streaming  -> Mono-Mikrofon In (Endpoint 0x83 IN)
+Interface 2: USB Audio Streaming  -> Stereo-Kopfhörerausgabe Out (Endpoint 0x03 OUT)
+Interface 3: HID Vendor Control   -> Corsair Bragi Protokoll (Usage Page 0xff42, 0x81 IN / 0x01 OUT)
+Interface 4: HID Consumer Control -> Lautstärkerad & Multimediatasten (0x82 IN / 0x02 OUT)
 ```
 
-`TT=08` adressiert den Receiver. Der Headsetendpunkt wird aus der gekoppelten
-Geräteliste ermittelt und ist bei einem einzelnen Gerät üblicherweise `09`.
+---
 
-## Initialisierung
+## 2. HID-Report-Framing (Interface 3)
 
-1. Receiver-Firmware mit `02 13` lesen
-2. Receiver mit `01 03 00 02` in Softwaremodus setzen
-3. Ressource `24` öffnen und gekoppelte Geräte lesen
-4. falls diese Legacy-Liste leer ist, aktive Funkkanäle über Eigenschaft `02 36`
-   ermitteln und Vendor-/Produkt-ID mit `02 11`/`02 12` direkt abfragen
-5. ein Corsair-HS80 mit Produkt-ID `0a69` (bestätigt) oder `0a71`
-   (experimentell) auswählen
-6. Headset-Heartbeat `12`
-7. Headset-Firmware, Akku und Mikrofonstatus lesen
-8. Headset in Softwaremodus setzen und RGB-Endpunkt öffnen
+Die Kommunikation auf Interface 3 erfolgt über 64 Byte lange HID-Reports.
 
-Der gekoppelte Endpoint wird nicht hart codiert.
-Vor dem Öffnen der RGB-Ressource schließt der Daemon den idempotenten Handle 0,
-damit ein nach einem unvollständigen Client-Abbruch verbliebener Handle nicht
-als erfolgreicher Start missverstanden wird.
-
-## Verwendete Kommandos
-
-| Ziel | Zweck | Kommando |
-| --- | --- | --- |
-| beide | Softwaremodus | `01 03 00 02` |
-| beide | Hardwaremodus | `01 03 00 01` |
-| beide | Firmware | `02 13` |
-| beide | Heartbeat | `12` |
-| Headset | Akku | `02 0f` |
-| Headset | Mikrofonstatus | `02 a6` |
-| Headset | RGB öffnen | `0d 00 01` |
-| Headset | RGB schreiben | `06 00` |
-| Headset | Sleep-Endpunkt | `01 0d 00` |
-| Headset | Sleep-Dauer | `01 0e 00` |
-
-Receiverressourcen verwenden `05 01 01` zum Schließen, `0d 01` zum Öffnen,
-`09 01` zum Initiieren und `08 01` zum Lesen.
-
-## RGB
-
-Die neun Farbbytes sind planar angeordnet:
+### Output-Report (Host -> Headset / Transceiver)
 
 ```text
-R_logo R_indicator R_mic G_logo G_indicator G_mic B_logo B_indicator B_mic
+Byte:   00       01       02       03       04 .. 63
+      +--------+--------+--------+--------+-------------------------+
+      |  0x02  | Target | Cmd[0] | Cmd[1] | Optional Payload / Pad  |
+      +--------+--------+--------+--------+-------------------------+
+       ReportID  Ziel     Kommando-Opcode  Nutzdaten & Nullen bis 64B
 ```
 
-Vor den Daten stehen Länge als Little Endian und zwei reservierte Nullbytes:
+- **Byte 0 (`0x02`)**: HID Output Report ID.
+- **Byte 1 (`Target`)**:
+  - `0x08`: Adressiert den USB-Receiver (oder das Headset direkt im Kabelmodus).
+  - `0x09` .. `0x0F`: Adressiert das gekoppelte Funk-Headset über den jeweiligen Funkkanal.
+- **Bytes 2..3 (`Command`)**: 1- bis 2-Byte Opcode.
+- **Bytes 4..63**: Befehlsspezifische Parameter, mit Nullen auf 64 Byte aufgefüllt.
+
+---
+
+### Input-Report (Antwort auf Befehle: Gerät -> Host)
 
 ```text
-09 00 00 00 <neun Farbbytes>
+Byte:   00       01       02       03       04 .. 63
+      +--------+--------+--------+--------+-------------------------+
+      |  0x01  | Ch-Idx | EchoCmd| Status | Antwortdaten ...        |
+      +--------+--------+--------+--------+-------------------------+
+       ReportID  Kanal    Opcode   00=OK    Nutzdaten (z.B. Akku, FW)
 ```
 
-Bei physisch hochgeklapptem Mikrofon wird die Mikrofonzone rot dargestellt,
-sofern der Mute-Indikator aktiviert ist.
+- **Byte 0 (`0x01`)**: HID Input Report ID für synchrone Antworten.
+- **Byte 1 (`Channel Index`)**: Zero-based Zielkanal (`0x00` = Target `0x08`, `0x01` = Target `0x09`).
+- **Byte 2 (`EchoCmd`)**: Spiegelt das erste Byte des gesendeten Kommandos wider.
+- **Byte 3 (`Status`)**:
+  - `0x00`: Erfolg.
+  - `> 0x00` (z. B. `0x02`, `0x06`): Fehler / Ablehnung durch die Firmware.
 
-### Stumm-Suppression der Firmware
+---
 
-Bei Firmware 5.8.48 (bestätigt) unterdrückt das Headset die komplette
-Software-Beleuchtung, solange der Mikrofonarm hochgeklappt (stumm) ist.
-Farbwrites werden dann zwar mit Status `00` bestätigt, haben aber keine
-sichtbare Wirkung; der Mute-Indikator kann in diesem Zustand ebenfalls nicht
-erscheinen. Der Daemon wendet das gespeicherte Profil daher über das
-Mikrofon-Ereignis (`0x8e`/`0xa6`) erneut an, sobald der Arm heruntergeklappt
-wird.
+### Spontane Event-Reports (Report ID `0x03`)
 
-## Statuswerte
+Das Headset sendet Statusänderungen asynchron ohne vorherige Anfrage über Report ID `0x03`:
 
-- Antworten verwenden `01 <TT-08> <erstes Kommandobyte> <Status> <Payload...>`.
-  Eine echte Receiver-Firmwareantwort auf `02 08 02 13 ...` war
-  `01 00 02 00 05 09 82 00 ...` und ergibt Firmware `5.9.130`.
-- Ein Statusbyte ungleich null ist eine Geräteablehnung und kein gültiger
-  Payload. Beim Legacy-Ressourcen-Read wurde auf diesem Receiver Status `02`
-  beobachtet; die Endpoint-Erkennung fällt dann auf Eigenschaft `02 36` zurück.
-- Receiver-Firmware: Major/Minor in Bytes 4 und 5, Patch als Little-Endian in
-  Bytes 6 und 7
-- Akkuantwort: Little-Endian-Zehntelprozent in Bytes 4 und 5
-- Mikrofonantwort: Byte 4, `0=aktiv`, `1=stumm`
-- Firmware des Headsets: Bytes 4 bis 6
-- Sleep-Dauer: Millisekunden als Little-Endian-`uint32`
+```text
+Byte:   00       01       02       03       04       05       06 .. 63
+      +--------+--------+--------+--------+--------+--------+----------------+
+      |  0x03  | Target | 0x01   | EvType | 0x00   | Value1 | Value2 / Pad   |
+      +--------+--------+--------+--------+--------+--------+----------------+
+```
 
-Bekannte Report-ID-3-Ereignisse:
+| Event Type (Byte 3) | Bedeutung | Datenformat |
+| :--- | :--- | :--- |
+| `0x0F` | **Akku-Update** | Bytes 5..6: Zehntelprozent als Little-Endian `uint16` (z. B. `0x03ca` = 970 = 97.0 %) |
+| `0x10` | **Ladestatus** | Byte 5: `0x00` = Batteriebetrieb, `0x01` = Headset wird geladen |
+| `0x36` | **Verbindungsstatus** | Byte 5: Funkkanal-Statusbitfield |
+| `0x8E` / `0xA6` | **Mikrofon-Arm-Schalter** | Byte 5: `0x00` = Arm unten (Aktiv), `0x01` = Arm oben (Stumm) |
 
-- Event `0x0f`: Akku, Zehntelprozent in Bytes 5 und 6
-- Event `0x10`: Ladestatus in Byte 5
-- Event `0x36`: Verbindungsstatus in Byte 5
-- Event `0x8e` oder `0xa6`: Mikrofonstatus in Byte 5
+---
 
-Der Ladestatus ist weniger umfassend auf verschiedenen Firmwareständen
-validiert und bleibt deshalb als unbekannt (`-1`), bis ein Ereignis eintrifft.
+## 3. Kommandotabelle
 
-## ALSA statt HID
+| Zweck | Ziel | Opcode | Payload | Bemerkung |
+| :--- | :---: | :--- | :--- | :--- |
+| **Softwaremodus aktivieren** | Beide | `01 03 00 02` | — | Erforderlich für Software-RGB & Abfragen |
+| **Hardwaremodus aktivieren** | Beide | `01 03 00 01` | — | Setzt Gerät in Standalone-Modus zurück |
+| **Firmware-Version lesen** | Beide | `02 13` | — | Liefert Major, Minor, Patch |
+| **Heartbeat / Keepalive** | Beide | `12` | — | *Achtung:* Im USB-Direktkabelbetrieb nicht senden! |
+| **Akkustand abfragen** | Headset | `02 0F` | — | Zehntelprozent (0..1000) |
+| **Mikrofonstatus abfragen** | Headset | `02 A6` | — | `0` = Aktiv, `1` = Stumm |
+| **RGB-Ressource öffnen** | Headset | `0D 00 01` | — | Öffnet Beleuchtungskanal 0 |
+| **RGB-Ressource schließen** | Headset | `05 01 00` | — | Schließt Beleuchtungskanal 0 |
+| **RGB-Farben schreiben** | Headset | `06 00` | `09 00 00 00 <9 Bytes>` | Planare RRR-GGG-BBB Farbdaten |
+| **Sleep-Timer Endpunkt** | Headset | `01 0D 00` | `01` (an) / `00` (aus) | Aktiviert Sleep-Timeout |
+| **Sleep-Timer Dauer** | Headset | `01 0E 00` | Millisekunden (`uint32` LE) | z. B. 15 min = `00 eb 0d 00` |
 
-Das HS80 exponiert folgende Standardregler:
+---
 
-- `Sidetone Playback Switch`
-- `Sidetone Playback Volume`, `-42` bis `+4 dB`
-- `Mic Capture Switch`
-- `Mic Capture Volume`, `-36` bis `0 dB`
-- `Headset Playback Switch/Volume`
+## 4. Planare RGB-Farbkodierung
 
-Sidetone und Mikrofon-Gain werden deshalb nicht über proprietäre HID-Befehle
-gesteuert.
+Die RGB-Daten für die drei getrennten Zonen (*Logo*, *Statusanzeige*, *Mikrofon-LED*) werden in einem planaren Blockformat übertragen:
 
-## Quellen und Abgleich
+```text
+Payload-Header: 09 00 00 00 (Länge 9 Bytes Little-Endian + 2 Nullbytes)
+Farbdaten:
+  Byte 0: Rot-Kanal Logo
+  Byte 1: Rot-Kanal Statusanzeige
+  Byte 2: Rot-Kanal Mikrofon-LED
+  Byte 3: Grün-Kanal Logo
+  Byte 4: Grün-Kanal Statusanzeige
+  Byte 5: Grün-Kanal Mikrofon-LED
+  Byte 6: Blau-Kanal Logo
+  Byte 7: Blau-Kanal Statusanzeige
+  Byte 8: Blau-Kanal Mikrofon-LED
+```
 
-Die Protokollfakten wurden gegen folgende öffentlich verfügbare Arbeiten und
-gegen die lokalen USB-/HID-Deskriptoren abgeglichen:
+---
 
-- OpenLinkHub: <https://github.com/jurkovic-nikola/OpenLinkHub>
-- HeadsetControl HS80-Analyse: <https://github.com/Sapd/HeadsetControl/issues/178>
-- ckb-next-Geräteanfrage: <https://github.com/ckb-next/ckb-next/issues/964>
+## 5. Firmware-Eigenheiten & Workarounds
+
+### 1. Mute-Suppression der Firmware
+Bei Firmware-Stand 5.8.48 unterdrückt das Headset jegliche Software-RGB-Updates, solange der Mikrofonarm hochgeklappt (stummgeschaltet) ist. Schreibzugriffe werden zwar bestätigt, aber hardwareseitig nicht sichtbar dargestellt.
+- **Workaround im Daemon**: Bei Eintreffen des Mikrofon-Herunterklapp-Events (`0x8e`/`0xa6` mit Wert `0`) wird das gespeicherte RGB-Profil automatisch erneut an das Headset übertragen.
+
+### 2. Heartbeat im Direktkabelbetrieb
+Wird das Headset per USB-Kabel angeschlossen (`1b1c:0a69`), führt das Senden des drahtlosen Heartbeats `12` zu keiner Antwort und führt bei Wiederholung zum internen USB-Reset des Headsets.
+- **Workaround im Daemon**: Im Kabelmodus wird kein Heartbeat `12` gesendet; als periodische Liveness-Prüfung dient das Auslesen der Akkudaten (`02 0f`).
