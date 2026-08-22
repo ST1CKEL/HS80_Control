@@ -1,115 +1,162 @@
-# Architektur
+# Architektur von HS80 Control
 
-## Prozesse
+Dieses Dokument beschreibt den internen Aufbau, das Threading-Modell, die Zustandsverwaltung und die Sicherheitsgrenzen von **HS80 Control**.
 
-```text
-hs80-control ─┐
-hs80ctl ──────┼─ D-Bus ─ hs80d ─ hidapi ─ /dev/hidraw (Interface 3)
-              │             ├── amixer ─ ALSA USB controls
-              │             └── systemd --user ─ HS80 Spatial PipeWire
-              └──────────────────────────────────────────────────────
+---
+
+## 1. Prozess- und Komponentenübersicht
+
+```mermaid
+flowchart TB
+    subgraph UI_Layer["Präsentationsschicht"]
+        GUI["🖥️ hs80-control (GTK4 / libadwaita)"]
+        CLI["⌨️ hs80ctl (CLI-Werkzeug)"]
+        ThirdParty["🌐 Externe D-Bus Clients (Waybar, Scripts)"]
+    end
+
+    subgraph IPC["D-Bus Session Bus (io.github.hs80control.Daemon)"]
+        DBusIface["D-Bus Interface / Object Path\n/io/github/hs80control/Daemon"]
+    end
+
+    subgraph Daemon["Benutzerdienst (hs80d)"]
+        Service["HS80Service (Asyncio D-Bus Bridge)"]
+        Controller["DeviceController (Hauptsteuerung)"]
+        State["StateStore (Thread-sicherer Zustand)"]
+        Config["ConfigStore (Atomare JSON-Persistenz)"]
+        Mixer["AlsaMixer (USB Audio Controls)"]
+        Spatial["SpatialManager (PipeWire SOFA Graph)"]
+        Queue["Thread-sichere Request-Queue"]
+        Worker["Worker-Thread: hs80-io\n(Exklusiver HID-Handle-Besitzer)"]
+    end
+
+    subgraph OS_Hardware["Kernel & Hardware"]
+        Sysfs["/sys/class/hidraw & /proc/asound"]
+        Hidraw["/dev/hidrawX (Interface 3 - 0xff42)"]
+        AlsaHW["snd-usb-audio (ALSA Simple Controls)"]
+        PW["PipeWire Server & WirePlumber"]
+        Dongle["USB Transceiver 1b1c:0a6b"]
+        HeadsetDirect["Headset am Kabel 1b1c:0a69"]
+    end
+
+    GUI -->|Methoden & Signale| DBusIface
+    CLI -->|Methoden & Properties| DBusIface
+    ThirdParty -->|PropertiesChanged| DBusIface
+
+    DBusIface <--> Service
+    Service <--> Controller
+    Controller <--> State
+    Controller <--> Config
+    Controller --> Mixer
+    Controller --> Spatial
+    Controller --> Queue
+    Queue --> Worker
+
+    Worker -->|Discovery & Serial| Sysfs
+    Worker -->|hidapi write / read| Hidraw
+    Mixer -->|amixer sset / sget| AlsaHW
+    Spatial -->|systemctl --user & pw-dump| PW
+
+    Hidraw --> Dongle
+    Hidraw --> HeadsetDirect
 ```
 
-`hs80d` läuft in der Benutzersitzung. Dadurch kann der Dienst gleichzeitig auf
-die durch `uaccess` freigegebene hidraw-Datei, die ALSA-Regler und die
-PipeWire-Sitzung zugreifen. Ein Root- oder Systemdienst ist nicht notwendig.
+`hs80d` läuft vollständig in der unprivilegierten Benutzersitzung (`systemd --user`). Dadurch kann der Dienst gleichzeitig auf:
+- die durch `uaccess` freigegebene hidraw-Gerätedatei,
+- die ALSA-Kartenregler des Benutzers und
+- den PipeWire-Audio-Server der Benutzersitzung
 
-## Geräteauswahl und Mehrgerätebetrieb
+zugreifen, ohne jemals Root-Rechte oder polkit-Eskalationen zu benötigen.
 
-Der Daemon sucht ausschließlich HID-Interface 3 des Receivers `1b1c:0a6b` und
-verwaltet pro Benutzersitzung genau einen Receiver. Sind mehrere passende
-Receiver angeschlossen, wird derzeit der erste nach hidraw-Gerätenamen
-sortierte Kontrollknoten verwendet; eine explizite Auswahl per Konfiguration,
-D-Bus, CLI oder Oberfläche existiert nicht.
+---
 
-Soweit vorhanden, bindet die USB-Seriennummer die ALSA-Regler an den
-ausgewählten Receiver. Die Spatial-Konfiguration bricht bei mehreren passenden
-physischen HS80-Sinks bewusst ab. Für einen eindeutigen Betrieb sollte deshalb
-nur ein kompatibler Receiver angeschlossen sein.
+## 2. Threading-Modell & HID-Serialisierung
 
-## HID-Serialisierung
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as D-Bus Client (GUI/CLI)
+    participant Async as HS80Service (Asyncio Loop)
+    participant Ctrl as DeviceController
+    participant Queue as Request Queue
+    participant Worker as Worker-Thread (hs80-io)
+    participant Device as HID Device (/dev/hidrawX)
 
-Receiverkommandos, Headsetkommandos, RGB-Frames, Heartbeats und spontane
-Ereignisse teilen sich dasselbe HID-Handle. Mehrere Leser würden Antworten
-einander wegnehmen. Deshalb besitzt ausschließlich der Thread `hs80-io` das
-Handle.
+    Client->>Async: Call SetRgb("static", 80, ...)
+    Async->>Ctrl: Submit Request via Future
+    Ctrl->>Queue: Request(op, args, future)
+    Note over Worker: Worker liest Queue seriell
+    Queue->>Worker: Pop Request
+    Worker->>Device: hid_write(0x02, target, cmd, payload)
+    Device-->>Worker: hid_read_timeout(0x01, target, response)
+    Worker->>Ctrl: StateStore.update(rgb_...)
+    Ctrl->>Async: Future.set_result(True)
+    Async->>Client: Return Success
+    Async-->>Client: Emit PropertiesChanged
+```
 
-Der Thread führt folgende Aufgaben seriell aus:
+### Warum ein exklusiver Worker-Thread?
 
-1. USB-Hotplug und Berechtigungen prüfen
-2. Receiver und gekoppeltes Headset initialisieren
-3. Anforderungen aus einer threadsicheren Queue bearbeiten
-4. alle zehn Sekunden beide Endpunkte per Heartbeat prüfen
-5. Batterie-, Lade-, Mute- und Verbindungsereignisse verteilen
-6. aktive RGB-Effekte mit maximal 25 Frames pro Sekunde schreiben
-7. beim Beenden Headset und Receiver in den Hardwaremodus zurücksetzen
+Im Corsair Bragi-Protokoll teilen sich Receiverkommandos, Headsetkommandos, RGB-Frames, Heartbeats und spontane Hardware-Ereignisse (wie Akku- oder Mute-Meldungen) **denselben gemeinsamen USB-HID-Handle**.
 
-Jeder Schreibbefehl wartet auf genau eine Antwort. Dazwischen eintreffende
-Report-ID-3-Ereignisse werden verarbeitet und nicht als Antwort verwendet.
-Headsetantworten müssen zusätzlich den ersten Opcode spiegeln, damit eine
-verspätete Antwort nach einem Timeout nicht den nächsten Befehl bestätigt.
-Receiverantworten haben ein anderes Nutzdatenformat; nach einem Receiver-
-Timeout wird deshalb die Verbindung verworfen und neu geöffnet. Paketlängen,
-Endpunkte, Farben und Wertebereiche werden vor dem Schreiben begrenzt.
+Würden mehrere Threads gleichzeitig auf dem Handle lesen oder schreiben:
+1. Könnten Antworten auf Konfigurationskommandos von einem anderen Thread abgefangen werden.
+2. Könnte ein periodischer Heartbeat eine RGB-Frame-Antwort überholen.
+3. Würden Timeouts und Stream-Desynchronisationen auftreten.
 
-## D-Bus
+Deshalb besitzt **ausschließlich der Thread `hs80-io`** das offene HID-Handle.
 
-- Busname: `io.github.hs80control.Daemon`
-- Objekt: `/io/github/hs80control/Daemon`
-- Interface: `io.github.hs80control.Daemon`
+### Aufgaben des Worker-Threads
 
-Wichtige Methoden:
+1. **USB-Hotplug & Discovery**: Überwachung von Sysfs nach dem Receiver `1b1c:0a6b` oder direkt angeschlossenem Headset `1b1c:0a69`.
+2. **Initialisierung**: Umschaltung in den Softwaremodus (`01 03 00 02`) und Ermittlung gekoppelter Endpunkte.
+3. **Queue-Abarbeitung**: Serielles Ausführen von Benutzerkommandos mit Bestätigung über `concurrent.futures.Future`.
+4. **Heartbeat-Zyklus**: Periodische Abfrage alle 10 Sekunden zur Erkennung von Verbindungsabbrüchen.
+5. **Event-Dispatching**: Verarbeitung spontaner Report-ID-`0x03`-Events (Akkustand, Ladezustand, Mikrofon-Arm-Schalter).
+6. **RGB-Animationen**: Taktung von dynamischen Effekten (*Pulse*, *Rainbow*) mit bis zu 25 Frames pro Sekunde.
+7. **Clean Teardown**: Sichere Rückversetzung von Headset und Dongle in den Hardwaremodus (`01 03 00 01`) beim Beenden des Dienstes.
 
-- `Refresh()`
-- `SetRgb(mode, brightness, logo, indicator, microphone)`
-- `UpdateRgb(mode, brightness, logo, indicator, microphone)` für atomare
-  Teiländerungen; leere Farben und negative Helligkeit bedeuten unverändert
-- `SetSleepTimer(minutes)`
-- `SetSidetone(enabled, level_db)`
-- `SetMicrophoneGain(level_db)`
-- `SetMicrophoneMuted(muted)`
-- `ConfigureSpatial(sofa_file)`
-- `SetSpatialEnabled(enabled)`
-- `SetSpatialMakeDefault(enabled)`
+---
 
-Zustandsänderungen werden als standardkonformes
-`org.freedesktop.DBus.Properties.PropertiesChanged` signalisiert.
-HID/ALSA-Aufrufe und die langsameren Spatial-Aufrufe besitzen getrennte
-Aufruf-Sperren. Eine PipeWire-Neukonfiguration blockiert dadurch keine
-Headset- oder Mikrofonaktion.
+## 3. D-Bus-Architektur & Unabhängige Lock-Domänen
 
-## Persistenz
+Um zu verhindern, dass langwierige Operationen (wie das Starten von PipeWire-Diensten oder Laden großer SOFA-Dateien) die reaktionsschnelle Steuerung von Lautstärke, Mute oder RGB blockieren, trennt `HS80Service` die Aufrufe in getrennte Asyncio-Locks:
 
-RGB-, Schlaf- und Spatial-Einstellungen liegen atomar geschrieben in
-`~/.config/hs80-control/config.json`. Eine Einstellung wird beim nächsten
-Verbinden nur automatisch angewendet, nachdem der Benutzer sie mindestens
-einmal explizit gesetzt hat. Der erste Dienststart verändert daher keine
-Beleuchtung und keinen Schlaf-Timer.
+```mermaid
+graph TD
+    subgraph D-Bus Methods
+        M_HID["Refresh, Reconnect, SetRgb, UpdateRgb, SetSleepTimer"]
+        M_ALSA["SetSidetone, SetMicrophoneGain, SetMicrophoneMuted"]
+        M_Spatial["ConfigureSpatial, SetSpatialEnabled, SetSpatialMakeDefault"]
+    end
 
-## Audio
+    subgraph Locks
+        Lock_HW["🔒 _hardware_lock\n(HID & ALSA Operationen)"]
+        Lock_Spatial["🔒 _spatial_lock\n(PipeWire & Systemd Operationen)"]
+    end
 
-Sidetone und Mikrofon-Gain sind standardisierte USB-Audio-Regler. Der Dienst
-ermittelt die ALSA-Karte bei jeder Operation über `/proc/asound/card*/usbid`
-und nicht über eine instabile Kartennummer.
+    M_HID --> Lock_HW
+    M_ALSA --> Lock_HW
+    M_Spatial --> Lock_Spatial
+```
 
-Der Spatial-Graph läuft als eigener PipeWire-Client. Seine Stereoausgabe wird
-über `target.object` fest an den physischen HS80-Sink gebunden. Damit kann der
-Graph weder rekursiv in sich selbst routen noch bei getrenntem Headset auf
-Lautsprecher ausweichen.
+- **Hardware-Lock**: Schnelle HID- und ALSA-Befehle werden unmittelbar an die Worker-Queue übergeben.
+- **Spatial-Lock**: PipeWire-Konfigurationsänderungen, `systemctl --user`-Neustarts und Sink-Wartezyklen laufen isoliert im Spatial-Lock.
 
-SOFA-Datei, generierter Graph und gespeicherte Einstellung werden gemeinsam
-ausgetauscht. Scheitert ein Neustart oder Schreibvorgang, stellt der Manager
-die vorherige funktionsfähige Konfiguration wieder her. Bei mehreren passenden
-physischen HS80-Sinks bricht er eindeutig ab, statt zufällig den ersten zu
-wählen. `SpatialEnabled` wird erst wahr, wenn Dienst und virtueller Sink bereit
-sind.
+---
 
-## Sicherheitsgrenzen
+## 4. Persistenz & Konfigurationsintegrität
 
-- udev gewährt nur Interface 3 Zugriff.
-- Interface 4 und alle Audiointerfaces bleiben bei den Kernelmodulen.
-- keine USB-Interface-Claims und kein Detach von `snd-usb-audio`
-- keine Pairing-, Bootloader- oder Firmware-Schreibbefehle
-- keine Netzwerkports oder Telemetrie
-- D-Bus ausschließlich in der lokalen Benutzersitzung
-- PipeWire-Konfiguration akzeptiert nur vorhandene `.sofa`-Dateien
+Die Konfiguration wird in `~/.config/hs80-control/config.json` verwaltet:
+
+1. **Atomares Schreiben**: Konfigurationsdateien werden zunächst in eine temporäre Datei im selben Verzeichnis geschrieben, via `os.fsync()` synchronisiert und mittels `os.replace()` atomar ausgetauscht.
+2. **Rechteabsicherung**: Das Verzeichnis `~/.config/hs80-control/` wird strikt mit Modus `0700` angelegt, Dateien mit `0600`.
+3. **Rollback-Fähigkeit**: Schlägt das Aktivieren einer neuen SOFA-HRTF-Konfiguration fehl, stellt `SpatialManager` die vorherige funktionierende Konfiguration und die WirePlumber-Standardausgabe automatisch wieder her.
+
+---
+
+## 5. Sicherheitsgrenzen
+
+- **Striktes udev-Scoping**: Die udev-Regel gewährt ausschließlich Zugriff auf Interface 3 (Vendor-Usage-Page `0xff42`).
+- **Kernel-Treiber unberührt**: USB Audio Interfaces 0, 1, 2 und HID-Tasten Interface 4 verbleiben vollständig bei `snd-usb-audio` und `hid-generic`.
+- **Keine invasiven Kommandos**: Der Quellcode enthält bewusst keinerlei Firmware-Flash- oder Neukoppelungs-(Pairing-)Befehle, um ein Bricken der Hardware auszuschließen.
+- **Isolierter Socket**: Keine Netzwerk-Sockets, keine Telemetrie, D-Bus nur auf dem lokalen Benutzer-Session-Bus.

@@ -5,3 +5,4 @@ dist/
 *.rpm
 *.tar.gz
 .coverage
+.zcode/
