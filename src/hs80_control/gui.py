@@ -25,6 +25,8 @@ from .dbus_service import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
 
 
 APP_ID = "io.github.hs80control.App"
+DEVELOPER_NAME = "Stickelbroeck Labs"
+DEVELOPER_URL = "https://stickelbroeck.com/"
 DBUS_CALL_TIMEOUT_MS = 30_000
 SPATIAL_DBUS_CALL_TIMEOUT_MS = 60_000
 TRAY_WAIT_SECONDS = 20
@@ -312,15 +314,18 @@ class HS80Window(Adw.ApplicationWindow):
             application_name="HS80 Control",
             application_icon=APP_ID,
             version=__version__,
-            developer_name="HS80 Control contributors",
+            developer_name=DEVELOPER_NAME,
+            copyright=f"© 2026 {DEVELOPER_NAME}",
             website="https://github.com/ST1CKEL/HS80_Control",
             issue_url="https://github.com/ST1CKEL/HS80_Control/issues",
             comments=(
                 "Linux-Steuerung für das hardwaregetestete Corsair HS80 RGB "
-                "Wireless mit Receiver 1b1c:0a6b und Headset-PID 0a69."
+                "Wireless mit Receiver 1b1c:0a6b und Headset-PID 0a69.\n\n"
+                f"Entwickelt von {DEVELOPER_NAME}."
             ),
             license_type=Gtk.License.GPL_3_0,
         )
+        dialog.add_link(DEVELOPER_NAME, DEVELOPER_URL)
         dialog.present(self)
 
     @staticmethod

@@ -563,6 +563,8 @@ Fehlerberichte und Pull Requests sind willkommen – siehe [CONTRIBUTING.md](CON
 
 ## Lizenz & Haftungsausschluss
 
+HS80 Control wird von [Stickelbroeck Labs](https://stickelbroeck.com/) entwickelt.
+
 - **Programmcode & Treiber**: Lizenziert unter der [GNU General Public License v3.0 or later (GPL-3.0-or-later)](LICENSE).
 - **AppStream Metadaten**: Freigegeben unter [Creative Commons Zero v1.0 Universal (CC0-1.0)](LICENSE.CC0).
 - **Projekthinweise**: Siehe [NOTICE](NOTICE).

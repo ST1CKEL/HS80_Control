@@ -84,6 +84,10 @@ class GuiPresentationTests(unittest.TestCase):
             self.gui._battery_presentation(97, 1, connected=False),
         )
 
+    def test_about_dialog_credits_the_developer(self) -> None:
+        self.assertEqual("Stickelbroeck Labs", self.gui.DEVELOPER_NAME)
+        self.assertEqual("https://stickelbroeck.com/", self.gui.DEVELOPER_URL)
+
     def test_missing_tray_is_explained_per_desktop(self) -> None:
         normal = "Schließen minimiert das Fenster, statt das Programm zu beenden"
         self.assertEqual(normal, self.gui._tray_subtitle(True, True, False))

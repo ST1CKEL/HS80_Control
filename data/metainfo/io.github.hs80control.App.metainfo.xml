@@ -7,9 +7,10 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <developer id="io.github.hs80control">
-    <name>HS80 Control contributors</name>
+    <name>Stickelbroeck Labs</name>
   </developer>
   <url type="homepage">https://github.com/ST1CKEL/HS80_Control</url>
+  <url type="vcs-browser">https://github.com/ST1CKEL/HS80_Control</url>
   <url type="bugtracker">https://github.com/ST1CKEL/HS80_Control/issues</url>
   <description>
     <p>
@@ -36,6 +37,11 @@
     <modalias>usb:v1B1Cp0A69d*</modalias>
   </provides>
   <releases>
+    <release version="0.7.1" date="2026-11-14">
+      <description>
+        <p>The About dialog names Stickelbroeck Labs as the developer.</p>
+      </description>
+    </release>
     <release version="0.7.0" date="2026-11-14">
       <description>
         <p>Lighting changes now apply live. Adds a colour-cycle mode, adjustable tempo, saved lighting profiles, a mute indicator with a free colour, and optional dimming at low battery. Effects use fewer frames to save battery.</p>
