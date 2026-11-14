@@ -74,6 +74,11 @@ Die Benutzeroberfläche folgt automatisch dem Hell-/Dunkel-Farbschema sowie den 
 | ![Mikrofonseite mit Sidetone und Gain](docs/screenshots/microphone.png) | ![Spatial-Seite mit binauralem 7.1](docs/screenshots/spatial.png) |
 | *Latenzfreier Sidetone, Hardware-Gain & EasyEffects-Sprung* | *SOFA-HRTF Raumklang-Faltung & Standardausgabe-Wahl* |
 
+| Akkuwarnung, Infobereich & Autostart |
+| :---: |
+| <img src="docs/screenshots/settings.png" alt="Übersicht mit Schaltern für Akkuwarnung, Infobereich und Autostart" width="50%"> |
+| *Schalter für die Akkuwarnung, das Weiterlaufen im Infobereich und den Start beim Anmelden* |
+
 ---
 
 ## Systemarchitektur
