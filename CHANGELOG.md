@@ -118,7 +118,6 @@ Die Warnung ist standardmäßig aktiv, mit den Schwellen 20 % (niedrig) und 10 %
 - Erste Veröffentlichung.
 
 [0.8.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.8.0
-[0.7.1]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.7.1
 [0.7.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.7.0
 [0.6.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.6.0
 [0.5.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.5.0
