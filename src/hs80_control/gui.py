@@ -577,6 +577,50 @@ class HS80Window(Adw.ApplicationWindow):
         notifications.append(self.battery_notify_switch)
         content.append(notifications)
 
+        content.append(self._section_title(_("Sprachansagen")))
+        voice = Gtk.ListBox()
+        voice.add_css_class("boxed-list")
+        voice.set_selection_mode(Gtk.SelectionMode.NONE)
+        voice_settings = self.config.snapshot()["voice"]
+        self.voice_switches: dict[str, Adw.SwitchRow] = {}
+        for key, title, subtitle in (
+            (
+                "enabled",
+                _("Ansagen im Headset"),
+                _("Gesprochene Hinweise in der Sprache der App, direkt auf dem Headset"),
+            ),
+            ("microphone", _("Mikrofonarm"), _("Beim Hoch- und Herunterklappen")),
+            (
+                "charging",
+                _("Ladekabel"),
+                _("Beim Anstecken, Abziehen und bei vollem Akku"),
+            ),
+            ("battery", _("Niedriger Akkustand"), _("Bei niedrigem und bei fast leerem Akku")),
+        ):
+            row = Adw.SwitchRow(title=title, subtitle=subtitle)
+            row.set_active(bool(voice_settings[key]))
+            row.connect("notify::active", self._voice_changed)
+            self.voice_switches[key] = row
+            voice.append(row)
+        volume_row = Adw.ActionRow(title=_("Lautstärke der Ansagen"))
+        self.voice_volume_scale = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL, 10, 100, 5
+        )
+        self.voice_volume_scale.set_draw_value(True)
+        self.voice_volume_scale.set_digits(0)
+        self.voice_volume_scale.set_size_request(220, -1)
+        self.voice_volume_scale.set_value(int(voice_settings["volume"]))
+        self.voice_volume_scale.connect("value-changed", self._voice_changed)
+        volume_row.add_suffix(self.voice_volume_scale)
+        self.voice_sample_button = Gtk.Button(label=_("Probe hören"))
+        self.voice_sample_button.set_valign(Gtk.Align.CENTER)
+        self.voice_sample_button.connect("clicked", self._voice_sample)
+        volume_row.add_suffix(self.voice_sample_button)
+        self.voice_volume_row = volume_row
+        voice.append(volume_row)
+        self._voice_apply_source = 0
+        content.append(voice)
+
         content.append(self._section_title(_("Programmstart")))
         startup = Gtk.ListBox()
         startup.add_css_class("boxed-list")
@@ -984,6 +1028,9 @@ class HS80Window(Adw.ApplicationWindow):
             )
             self.spatial_error_banner.set_revealed(True)
             self.battery_notify_switch.set_sensitive(False)
+            for row in self.voice_switches.values():
+                row.set_sensitive(False)
+            self.voice_volume_row.set_sensitive(False)
             self._set_microphone_controls_sensitive(False)
 
     def _property(self, name: str, default: object) -> object:
@@ -1205,6 +1252,22 @@ class HS80Window(Adw.ApplicationWindow):
             bool(self._property("BatteryNotify", True))
         )
         self.battery_notify_switch.set_sensitive(self.proxy is not None)
+        if not self._voice_apply_source:
+            voice_on = bool(self._property("VoiceEnabled", True))
+            for key, name in (
+                ("enabled", "VoiceEnabled"),
+                ("microphone", "VoiceMicrophone"),
+                ("charging", "VoiceCharging"),
+                ("battery", "VoiceBattery"),
+            ):
+                row = self.voice_switches[key]
+                row.set_active(bool(self._property(name, True)))
+                row.set_sensitive(
+                    self.proxy is not None and (key == "enabled" or voice_on)
+                )
+            self.voice_volume_scale.set_value(int(self._property("VoiceVolume", 70)))
+            self.voice_volume_row.set_sensitive(self.proxy is not None and voice_on)
+            self.voice_sample_button.set_sensitive(headset)
         self.spatial_switch.set_active(bool(self._property("SpatialEnabled", False)))
         self.spatial_default_switch.set_active(
             bool(self._property("SpatialMakeDefault", True))
@@ -1746,6 +1809,41 @@ class HS80Window(Adw.ApplicationWindow):
             # On failure the switch falls back to what the daemon reports.
             always=self._sync_state,
         )
+
+    def _voice_changed(self, *_arguments: object) -> None:
+        if self._syncing:
+            return
+        # Dragging the volume would otherwise save on every step.
+        if self._voice_apply_source:
+            GLib.source_remove(self._voice_apply_source)
+        self._voice_apply_source = GLib.timeout_add(250, self._voice_apply)
+
+    def _voice_apply(self) -> bool:
+        self._voice_apply_source = 0
+        switches = self.voice_switches
+        self._call(
+            "UpdateVoice",
+            GLib.Variant(
+                "(nnnnn)",
+                (
+                    int(switches["enabled"].get_active()),
+                    int(self.voice_volume_scale.get_value()),
+                    int(switches["microphone"].get_active()),
+                    int(switches["charging"].get_active()),
+                    int(switches["battery"].get_active()),
+                ),
+            ),
+            show_result=False,
+            always=self._sync_state,
+        )
+        return GLib.SOURCE_REMOVE
+
+    def _voice_sample(self, _button: Gtk.Button) -> None:
+        if self._voice_apply_source:
+            # Hear the volume that is on the slider, not the saved one.
+            GLib.source_remove(self._voice_apply_source)
+            self._voice_apply()
+        self._call("PlayVoiceSample", None, show_result=False)
 
     def _spatial_default_toggled(
         self, row: Adw.SwitchRow, _property: object

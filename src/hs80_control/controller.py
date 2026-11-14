@@ -131,6 +131,7 @@ class DeviceController:
             rgb_battery_saver=settings["rgb"]["battery_saver"],
             sleep_minutes=settings["sleep"]["minutes"],
             battery_notify=settings["battery"]["notify"],
+            **{f"voice_{key}": value for key, value in settings["voice"].items()},
             # Persisted intent is not proof that the user service is running.
             spatial_enabled=False,
             spatial_make_default=settings["spatial"]["make_default"],
@@ -292,6 +293,25 @@ class DeviceController:
         # Pure settings change: no device I/O, so no trip through the worker.
         self.config.update_battery(notify=enabled)
         self.state.update(battery_notify=enabled)
+        return True
+
+    def update_voice(
+        self,
+        enabled: bool | None = None,
+        volume: int | None = None,
+        microphone: bool | None = None,
+        charging: bool | None = None,
+        battery: bool | None = None,
+    ) -> bool:
+        # Pure settings change as well; None keeps the current value.
+        settings = self.config.update_voice(
+            enabled=enabled,
+            volume=volume,
+            microphone=microphone,
+            charging=charging,
+            battery=battery,
+        )
+        self.state.update(**{f"voice_{key}": value for key, value in settings.items()})
         return True
 
     def _run(self) -> None:

@@ -60,6 +60,7 @@ Die Suite umfasst einen leichtgewichtigen Hintergrunddienst (`hs80d`), eine asyn
 - 🔌 **Direkter Kabelbetrieb**: Automatische Erkennung des Headsets am USB-Kabel (`1b1c:0a69`) mit voller Audio- und Steuerfunktionalität ohne USB-Dongle.
 - ⚡ **Ladekabel-Zustandserkennung**: Präzise Diagnose von `1b1c:0a6a` (ausgeschaltetes Headset lädt nur am Kabel).
 - 🌐 **Deutsch & Englisch**: Die Sprache wird beim ersten Start abgefragt und lässt sich in der Übersicht unter „Sprache" jederzeit umstellen. Sie gilt für Fenster, Infobereich, Akkuwarnung und `hs80ctl`.
+- 🗣️ **Sprachansagen im Headset**: Mikrofonarm, Ladekabel und Akkustand werden auf Deutsch oder Englisch angesagt – abschaltbar, mit eigener Lautstärke.
 - ⬆️ **Updates in der App**: Neue Versionen werden von der GitHub-Seite des Projekts bezogen und auf Knopfdruck installiert (Übersicht → „Updates").
 - 📦 **Grafischer Installer für Fedora**: Eine einzelne `.run`-Datei richtet Paket, Dienst, Sprache und Autostart ein – unter KDE Plasma und GNOME.
 - 🎨 **Adaptive GTK4/libadwaita GUI**: Automatische Anpassung an Dark/Light-Systemfarben und Fensterbreiten, System-Akzentfarben und Live-Benachrichtigungen.
@@ -496,6 +497,8 @@ ConfigureSpatial(sofa_file: str) -> bool
 SetSpatialEnabled(enabled: bool) -> bool
 SetSpatialMakeDefault(enabled: bool) -> bool
 SetBatteryNotify(enabled: bool) -> bool
+UpdateVoice(enabled: int16, volume: int16, microphone: int16, charging: int16, battery: int16) -> bool  # -1 = unverändert
+PlayVoiceSample() -> bool
 UpdateRgbOptions(speed: int16, mute_indicator: int16, mute_color: str, battery_saver: str) -> bool  # -1 bzw. "" = unverändert
 ```
 

@@ -22,6 +22,7 @@ from .dbus_service import BUS_NAME, HS80Service, OBJECT_PATH
 from .discovery import discover_hid_nodes
 from .notifications import BatteryNotifier, LowBatteryMonitor
 from .spatial import SpatialError, SpatialManager
+from .voice import AnnouncementMonitor, VoiceAnnouncer
 
 
 LOG = logging.getLogger(__name__)
@@ -63,6 +64,7 @@ async def run_daemon() -> int:
     bus: MessageBus | None = None
     service: HS80Service | None = None
     notifier: BatteryNotifier | None = None
+    announcer: VoiceAnnouncer | None = None
     controller_started = False
     stopped = asyncio.Event()
     wait_tasks: list[asyncio.Task[object]] = []
@@ -92,6 +94,14 @@ async def run_daemon() -> int:
             loop,
             LowBatteryMonitor(battery["low_percent"], battery["critical_percent"]),
         )
+        # Its own monitor: the spoken warning has its own switch.
+        announcer = VoiceAnnouncer(
+            controller.state,
+            AnnouncementMonitor(
+                LowBatteryMonitor(battery["low_percent"], battery["critical_percent"])
+            ),
+        )
+        service.voice = announcer
         controller.start()
         controller_started = True
         LOG.info("hs80d %s is ready", __version__)
@@ -120,6 +130,8 @@ async def run_daemon() -> int:
                 await task
         if service is not None:
             service.begin_shutdown()
+        if announcer is not None:
+            announcer.close()
         if notifier is not None:
             notifier.close()
             await notifier.wait_idle()

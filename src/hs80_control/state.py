@@ -20,6 +20,12 @@ class DeviceState:
     # Whether the daemon announces a low battery as a desktop notification.
     battery_notify: bool = True
     charging: int = -1
+    # Spoken announcements on the headset and which groups are spoken.
+    voice_enabled: bool = True
+    voice_volume: int = 70
+    voice_microphone: bool = True
+    voice_charging: bool = True
+    voice_battery: bool = True
     microphone_muted: int = -1
     hid_path: str = ""
     # "wireless" over the receiver, "usb" for a headset switched on while

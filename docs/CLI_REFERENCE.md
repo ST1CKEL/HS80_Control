@@ -143,6 +143,19 @@ Schaltet die Desktop-Benachrichtigung bei niedrigem Akkustand ein oder aus (Stan
 hs80ctl battery-warning <on | off>
 ```
 
+### `voice`
+
+Schaltet die Sprachansagen im Headset (Standard: an). Angesagt werden der Mikrofonarm, das Ladekabel und ein niedriger Akkustand, in der Sprache der App.
+
+```bash
+hs80ctl voice <on | off> [--volume 0..100] [--microphone on|off] [--charging on|off] [--battery on|off]
+hs80ctl voice test
+```
+
+- `--volume`: Lautstärke der Ansagen in Prozent (Standard: 70).
+- `--microphone`, `--charging`, `--battery`: einzelne Gruppen ein- oder ausschalten; nicht genannte bleiben unverändert.
+- `test`: spielt eine Probeansage auf dem Headset.
+
 ### `sleep`
 Stellt die Zeitspanne ein, nach der sich das Headset bei Nichtbenutzung automatisch abschaltet.
 

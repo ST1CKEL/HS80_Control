@@ -317,6 +317,19 @@ _ENGLISH: dict[str, str] = {
     "unbekannt": "unknown",
     " (niedrig, bitte laden)": " (low, please charge)",
     "Akkuwarnung": "Battery warning",
+    "Sprachansagen": "Voice announcements",
+    "Ansagen im Headset": "Announcements on the headset",
+    "Gesprochene Hinweise in der Sprache der App, direkt auf dem Headset":
+        "Spoken notices in the app's language, played straight on the headset",
+    "Beim Hoch- und Herunterklappen": "When it is flipped up or down",
+    "Ladekabel": "Charging cable",
+    "Beim Anstecken, Abziehen und bei vollem Akku":
+        "When it is plugged in, pulled, and when the battery is full",
+    "Niedriger Akkustand": "Low battery",
+    "Bei niedrigem und bei fast leerem Akku":
+        "When the battery is low and when it is almost empty",
+    "Lautstärke der Ansagen": "Announcement volume",
+    "Probe hören": "Play sample",
     "an": "on",
     "aus": "off",
     "Laden": "Charging",

@@ -68,6 +68,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     battery_warning.add_argument("state", choices=("on", "off"))
 
+    voice = subparsers.add_parser(
+        "voice", help="spoken announcements on the headset"
+    )
+    voice.add_argument("state", choices=("on", "off", "test"))
+    voice.add_argument("--volume", type=int, choices=range(0, 101), metavar="0..100")
+    for group, text in (
+        ("microphone", "microphone muted / activated"),
+        ("charging", "cable plugged in, pulled or battery full"),
+        ("battery", "battery low and critical"),
+    ):
+        voice.add_argument(f"--{group}", choices=("on", "off"), help=f"announce: {text}")
+
     sleep = subparsers.add_parser("sleep", help="set automatic power-off timer")
     sleep.add_argument("minutes", type=int, choices=range(0, 91), metavar="0..90")
 
@@ -184,6 +196,10 @@ def _print_status(status: dict[str, object], as_json: bool) -> None:
     )
     print(f"{_('Akkuwarnung')}: {on_off(status.get('BatteryNotify', True))}")
     print(f"{_('Laden')}: {yes_no(charging) if charging >= 0 else unknown}")
+    print(
+        f"{_('Sprachansagen')}: {on_off(status.get('VoiceEnabled', True))} / "
+        f"{status.get('VoiceVolume', 0)} %"
+    )
     microphone_text = _("stumm") if microphone else _("aktiv")
     print(f"{_('Mikrofonarm')}: {microphone_text if microphone >= 0 else unknown}")
     print(f"Firmware: {status.get('Firmware') or unknown}")
@@ -252,6 +268,22 @@ async def run(arguments: argparse.Namespace) -> int:
             applied = await _dbus_call(
                 interface.call_set_battery_notify(arguments.state == "on")
             )
+        elif command == "voice":
+            def flag(value: str | None) -> int:
+                return -1 if value is None else int(value == "on")
+
+            if arguments.state == "test":
+                applied = await _dbus_call(interface.call_play_voice_sample())
+            else:
+                applied = await _dbus_call(
+                    interface.call_update_voice(
+                        int(arguments.state == "on"),
+                        -1 if arguments.volume is None else arguments.volume,
+                        flag(arguments.microphone),
+                        flag(arguments.charging),
+                        flag(arguments.battery),
+                    )
+                )
         elif command == "sleep":
             applied = await _dbus_call(
                 interface.call_set_sleep_timer(arguments.minutes)

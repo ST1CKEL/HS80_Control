@@ -15,6 +15,7 @@ from .protocol import ProtocolError, parse_color
 
 RGB_MODES = frozenset({"off", "static", "pulse", "rainbow", "cycle"})
 RGB_BATTERY_SAVERS = frozenset({"none", "dim", "off"})
+VOICE_SWITCHES = ("enabled", "microphone", "charging", "battery")
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "version": 1,
@@ -36,6 +37,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
     # Desktop warning when the headset runs low. "critical" is announced a
     # second time, as an urgent notification.
     "battery": {"notify": True, "low_percent": 20, "critical_percent": 10},
+    # Spoken announcements on the headset; the three groups switch what is
+    # announced, "volume" is the playback level in percent.
+    "voice": {
+        "enabled": True,
+        "volume": 70,
+        "microphone": True,
+        "charging": True,
+        "battery": True,
+    },
     "spatial": {
         "enabled": False,
         "sofa_file": "",
@@ -119,6 +129,16 @@ def validate_config(data: dict[str, Any]) -> dict[str, Any]:
         raise ProtocolError(
             "battery thresholds must satisfy 1 <= critical_percent <= low_percent <= 99"
         )
+    voice = normalized.get("voice")
+    if not isinstance(voice, dict):
+        raise ProtocolError("voice configuration must be an object")
+    for key in VOICE_SWITCHES:
+        if not isinstance(voice.get(key), bool):
+            raise ProtocolError(f"voice {key} must be a boolean")
+    if isinstance(voice.get("volume"), bool) or not isinstance(voice.get("volume"), int):
+        raise ProtocolError("voice volume must be an integer")
+    if not 0 <= voice["volume"] <= 100:
+        raise ProtocolError("voice volume must be between 0 and 100")
     for key in ("enabled", "make_default"):
         if not isinstance(normalized["spatial"].get(key), bool):
             raise ProtocolError(f"spatial {key} must be a boolean")
@@ -231,6 +251,21 @@ class ConfigStore:
             validated = validate_config(candidate)
             self._save_locked(validated)
             self._data = validated
+
+    def update_voice(self, **values: bool | int | None) -> dict[str, Any]:
+        """Merge the given voice settings; None keeps the current value."""
+
+        with self._lock:
+            candidate = deepcopy(self._data)
+            for key, value in values.items():
+                if key not in candidate["voice"]:
+                    raise ProtocolError(f"unknown voice setting: {key}")
+                if value is not None:
+                    candidate["voice"][key] = value
+            validated = validate_config(candidate)
+            self._save_locked(validated)
+            self._data = validated
+            return deepcopy(self._data["voice"])
 
     def update_spatial(
         self,

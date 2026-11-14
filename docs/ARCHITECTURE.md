@@ -165,6 +165,19 @@ Der Abschnitt `battery` steuert die Desktop-Benachrichtigung des Daemons (`notif
 - Während des Ladens und im USB-Kabelbetrieb wird nicht gewarnt.
 - `notify` lässt sich zur Laufzeit umschalten: Schalter in der Übersicht, `hs80ctl battery-warning on|off` oder D-Bus `SetBatteryNotify`. Geänderte Schwellen in der Datei greifen nach `systemctl --user restart hs80d.service`.
 
+### Sprachansagen
+
+Der Abschnitt `voice` steuert die gesprochenen Hinweise (`voice.py`):
+
+```json
+"voice": { "enabled": true, "volume": 70, "microphone": true, "charging": true, "battery": true }
+```
+
+- Angesagt wird nur eine Änderung bei stehender Verbindung. Was das Headset beim Verbinden meldet, ist Ausgangslage und bleibt stumm; die Akkuwarnung ist die Ausnahme und folgt denselben Regeln wie die Desktop-Benachrichtigung, mit eigenem Schalter.
+- Die Clips liegen fertig gerendert in `assets/voice/<sprache>/` (24 kHz mono WAV) und folgen der Sprache der App. `tools/render-voice-clips.py` erzeugt sie über die ElevenLabs-API neu; zur Laufzeit ist keine Sprachsynthese nötig.
+- Abgespielt wird mit `pw-play` direkt auf die physische PipeWire-Senke des Headsets. Fehlt sie, bleibt die Ansage aus, statt über die Standardausgabe zu laufen. Eine neue Ansage bricht die laufende ab.
+- Einstellbar zur Laufzeit: Übersicht → „Sprachansagen", `hs80ctl voice` oder D-Bus `UpdateVoice`.
+
 ---
 
 ## 5. Sicherheitsgrenzen

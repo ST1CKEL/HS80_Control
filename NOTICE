@@ -15,6 +15,9 @@ and HeadsetControl implementations and community USB captures. This project is
 distributed under GPL-3.0-or-later so that compatible source can be studied and
 shared under the same terms.
 
+The spoken announcements in src/hs80_control/assets/voice were synthesised
+with the ElevenLabs text-to-speech service (tools/render-voice-clips.py).
+
 The PipeWire spatial graph follows the public PipeWire 1.6.8 spatializer
 example. SOFA/HRTF data sets are separate works with their own licenses and are
 not distributed by this project.

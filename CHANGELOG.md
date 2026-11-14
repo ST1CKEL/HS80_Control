@@ -6,6 +6,9 @@ Alle nennenswerten Änderungen an HS80 Control. Das Format folgt
 
 ## [Unveröffentlicht]
 
+### Neu
+- Sprachansagen im Headset: Der Daemon sagt an, wenn der Mikrofonarm hoch- oder heruntergeklappt wird, das Ladekabel angesteckt oder abgezogen wird, der Akku voll ist oder zur Neige geht. Die Ansagen folgen der Sprache der App (Deutsch/Englisch) und werden direkt auf dem Headset abgespielt, auch wenn eine andere Ausgabe Standard ist. Gruppen und Lautstärke lassen sich in der Übersicht unter „Sprachansagen“, mit `hs80ctl voice` oder über D-Bus (`UpdateVoice`, `PlayVoiceSample`) einstellen. Standard: an.
+
 ### Behoben
 - Akkuanzeige: Nach dem Abziehen des Ladekabels blieb „lädt“ stehen. Das Headset meldet das Abziehen mit dem Statuswert 2, der bisher verworfen wurde. Zusätzlich liest der Daemon Ladestatus und Akkustand jetzt beim Verbinden und einmal pro Minute selbst aus, statt sich allein auf Ereignisse zu verlassen.
 

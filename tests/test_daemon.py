@@ -26,6 +26,15 @@ class FakeNotifier:
         self.events.append("notifier.idle")
 
 
+class FakeAnnouncer:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+        self.events.append("announcer.create")
+
+    def close(self) -> None:
+        self.events.append("announcer.close")
+
+
 class FakeController:
     def __init__(self, events: list[str]) -> None:
         self.events = events
@@ -97,6 +106,10 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
                 "hs80_control.daemon.BatteryNotifier",
                 side_effect=lambda *_arguments: FakeNotifier(events),
             ),
+            patch(
+                "hs80_control.daemon.VoiceAnnouncer",
+                side_effect=lambda *_arguments: FakeAnnouncer(events),
+            ),
             patch.object(loop, "add_signal_handler"),
             patch("hs80_control.daemon.LOG.error"),
         ):
@@ -110,6 +123,10 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         # level, and be quiet before the bus goes away.
         self.assertLess(events.index("notifier.create"), events.index("controller.start"))
         self.assertLess(events.index("notifier.close"), events.index("bus.disconnect"))
+        # Same for the spoken announcements; the player thread must be gone
+        # before the process exits.
+        self.assertLess(events.index("announcer.create"), events.index("controller.start"))
+        self.assertIn("announcer.close", events)
         self.assertIn("controller.stop", events)
 
     async def test_name_conflict_never_starts_controller(self) -> None:

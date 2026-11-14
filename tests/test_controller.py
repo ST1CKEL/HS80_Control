@@ -927,6 +927,29 @@ class ControllerTests(unittest.TestCase):
             self.assertEqual(1, controller.snapshot().charging)
             controller._disconnect(graceful=True)
 
+    def test_voice_settings_are_published_and_persisted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            controller = DeviceController(
+                config=ConfigStore(path),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: None,
+                wired_finder=lambda: None,
+            )
+            self.assertTrue(controller.snapshot().voice_enabled)
+            self.assertEqual(70, controller.snapshot().voice_volume)
+
+            controller.update_voice(volume=40, microphone=False)
+            state = controller.snapshot()
+            self.assertEqual((True, 40, False, True), (
+                state.voice_enabled,
+                state.voice_volume,
+                state.voice_microphone,
+                state.voice_charging,
+            ))
+            self.assertEqual(40, ConfigStore(path).snapshot()["voice"]["volume"])
+
     def test_battery_warning_switch_is_on_by_default_and_persisted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"

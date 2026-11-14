@@ -28,6 +28,11 @@ _STATE_TO_DBUS = {
     "battery_percent": "BatteryPercent",
     "battery_notify": "BatteryNotify",
     "charging": "Charging",
+    "voice_enabled": "VoiceEnabled",
+    "voice_volume": "VoiceVolume",
+    "voice_microphone": "VoiceMicrophone",
+    "voice_charging": "VoiceCharging",
+    "voice_battery": "VoiceBattery",
     "microphone_muted": "MicrophoneMuted",
     "hid_path": "HidPath",
     "connection_mode": "ConnectionMode",
@@ -68,6 +73,8 @@ class HS80Service(ServiceInterface):
         self._hardware_lock = asyncio.Lock()
         self._spatial_lock = asyncio.Lock()
         self._stopping = False
+        # Set by the daemon; the service itself plays nothing.
+        self.voice: Any = None
         self.controller.state.add_listener(self._state_changed)
 
     def begin_shutdown(self) -> None:
@@ -222,6 +229,26 @@ class HS80Service(ServiceInterface):
         return self.controller.snapshot().sidetone_db
 
     @dbus_property(access=PropertyAccess.READ)
+    def VoiceEnabled(self) -> "b":
+        return self.controller.snapshot().voice_enabled
+
+    @dbus_property(access=PropertyAccess.READ)
+    def VoiceVolume(self) -> "y":
+        return self.controller.snapshot().voice_volume
+
+    @dbus_property(access=PropertyAccess.READ)
+    def VoiceMicrophone(self) -> "b":
+        return self.controller.snapshot().voice_microphone
+
+    @dbus_property(access=PropertyAccess.READ)
+    def VoiceCharging(self) -> "b":
+        return self.controller.snapshot().voice_charging
+
+    @dbus_property(access=PropertyAccess.READ)
+    def VoiceBattery(self) -> "b":
+        return self.controller.snapshot().voice_battery
+
+    @dbus_property(access=PropertyAccess.READ)
     def MicrophoneGainDb(self) -> "d":
         return self.controller.snapshot().mic_gain_db
 
@@ -327,6 +354,38 @@ class HS80Service(ServiceInterface):
     @method()
     async def SetBatteryNotify(self, enabled: "b") -> "b":
         return bool(await self._call(self.controller.set_battery_notify, enabled))
+
+    @method()
+    async def UpdateVoice(
+        self,
+        enabled: "n",
+        volume: "n",
+        microphone: "n",
+        charging: "n",
+        battery: "n",
+    ) -> "b":
+        # Negative numbers keep the current value.
+        def switch(value: int) -> bool | None:
+            return None if value < 0 else bool(value)
+
+        return bool(
+            await self._call(
+                self.controller.update_voice,
+                switch(enabled),
+                None if volume < 0 else volume,
+                switch(microphone),
+                switch(charging),
+                switch(battery),
+            )
+        )
+
+    @method()
+    async def PlayVoiceSample(self) -> "b":
+        """Speak a test phrase; false while no headset is connected."""
+
+        if self.voice is None:
+            return False
+        return bool(await self._call(self.voice.play_sample))
 
     @method()
     async def SetSidetone(self, enabled: "b", level_db: "d") -> "b":
