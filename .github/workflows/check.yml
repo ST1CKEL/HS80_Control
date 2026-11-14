@@ -78,11 +78,18 @@ jobs:
           tar -tzf "dist/hs80-control-$version.tar.gz" >/dev/null
 
       - name: Build source and binary RPMs
+        run: make rpm
+
+      - name: Build and unpack the installer bundle
         run: |
-          mkdir -p build/rpmbuild/BUILD build/rpmbuild/BUILDROOT
-          mkdir -p build/rpmbuild/RPMS build/rpmbuild/SOURCES
-          mkdir -p build/rpmbuild/SPECS build/rpmbuild/SRPMS build/rpmbuild/tmp
-          rpmbuild -ba packaging/hs80-control.spec \
-            --define "_topdir $PWD/build/rpmbuild" \
-            --define "_tmppath $PWD/build/rpmbuild/tmp" \
-            --define "_sourcedir $PWD/dist"
+          make installer-bundle
+          version=$(sed -n 's/^__version__[[:space:]]*=[[:space:]]*"\([^"]*\)"/\1/p' src/hs80_control/__init__.py)
+          bundle="dist/hs80-control-installer-$version.run"
+          start=$(awk '/^__PAYLOAD__$/ { print NR + 1; exit }' "$bundle")
+          tail -n +"$start" "$bundle" | tar -tz | sort > /tmp/bundle.txt
+          cat /tmp/bundle.txt
+          grep -q '^./install.sh$' /tmp/bundle.txt
+          grep -q '^./hs80_installer.py$' /tmp/bundle.txt
+          grep -q '^./hs80-control.svg$' /tmp/bundle.txt
+          grep -q '^./stickelbroeck-labs.png$' /tmp/bundle.txt
+          grep -q "^./hs80-control-$version-.*noarch.rpm$" /tmp/bundle.txt

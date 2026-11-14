@@ -18,7 +18,7 @@ BINDIR = $(DESTDIR)$(PREFIX)/bin
 LIBEXECDIR = $(DESTDIR)$(PREFIX)/libexec
 DATADIR = $(DESTDIR)$(PREFIX)/share
 
-.PHONY: all test check check-version check-prefix check-home dist rpm installer \
+.PHONY: all test check check-version check-prefix check-home dist rpm installer-bundle \
 	FORCE install install-user uninstall uninstall-user clean
 
 all: check
@@ -84,7 +84,7 @@ rpm: dist
 		--define "_sourcedir $(CURDIR)/dist"
 
 # One file for end users: the graphical installer with its logos and the RPM.
-installer: rpm
+installer-bundle: rpm
 	rm -rf build/installer
 	mkdir -p build/installer
 	cp installer/hs80_installer.py installer/install.sh build/installer/

@@ -566,7 +566,7 @@ make dist
 make rpm
 
 # Grafischen Installer als einzelne Datei bauen (dist/hs80-control-installer-<Version>.run)
-make installer
+make installer-bundle
 ```
 
 Die Tests laufen mit `HS80_CONTROL_LANGUAGE=de`, damit sie nicht von der Sprache des Systems abhängen. Der Installer lässt sich ohne Root-Rechte durchspielen: `HS80_INSTALLER_DRY_RUN=1 sh installer/install.sh` gibt die privilegierten Befehle nur aus.
