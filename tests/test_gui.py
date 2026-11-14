@@ -84,6 +84,22 @@ class GuiPresentationTests(unittest.TestCase):
             self.gui._battery_presentation(97, 1, connected=False),
         )
 
+    def test_low_battery_is_called_out_unless_charging(self) -> None:
+        self.assertEqual(
+            ("20 %", "20 Prozent · niedrig, bitte laden"),
+            self.gui._battery_presentation(20, 0),
+        )
+        self.assertEqual(
+            ("21 %", "21 Prozent"), self.gui._battery_presentation(21, -1)
+        )
+        self.assertEqual(
+            ("12 %", "12 Prozent · lädt"), self.gui._battery_presentation(12, 1)
+        )
+        self.assertEqual(
+            ("30 %", "30 Prozent · niedrig, bitte laden"),
+            self.gui._battery_presentation(30, 0, low_percent=30),
+        )
+
     def test_physical_microphone_arm_state_is_explained(self) -> None:
         self.assertEqual(
             ("Stummgeschaltet", "Arm hochgeklappt"),

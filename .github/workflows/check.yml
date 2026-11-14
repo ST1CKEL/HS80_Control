@@ -32,7 +32,11 @@ jobs:
 
   fedora:
     runs-on: ubuntu-latest
-    container: fedora:44
+    strategy:
+      fail-fast: false
+      matrix:
+        release: [44, 45]
+    container: fedora:${{ matrix.release }}
     timeout-minutes: 15
 
     steps:

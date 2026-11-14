@@ -27,6 +27,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "apply_on_connect": False,
     },
     "sleep": {"minutes": 15, "apply_on_connect": False},
+    # Desktop warning when the headset runs low. "critical" is announced a
+    # second time, as an urgent notification.
+    "battery": {"notify": True, "low_percent": 20, "critical_percent": 10},
     "spatial": {
         "enabled": False,
         "sofa_file": "",
@@ -92,6 +95,18 @@ def validate_config(data: dict[str, Any]) -> dict[str, Any]:
     normalized["sleep"]["minutes"] = minutes
     if not isinstance(normalized["sleep"].get("apply_on_connect"), bool):
         raise ProtocolError("sleep apply_on_connect must be a boolean")
+    battery = normalized.get("battery")
+    if not isinstance(battery, dict):
+        raise ProtocolError("battery configuration must be an object")
+    if not isinstance(battery.get("notify"), bool):
+        raise ProtocolError("battery notify must be a boolean")
+    for key in ("low_percent", "critical_percent"):
+        if isinstance(battery.get(key), bool) or not isinstance(battery.get(key), int):
+            raise ProtocolError(f"battery {key} must be an integer")
+    if not 1 <= battery["critical_percent"] <= battery["low_percent"] <= 99:
+        raise ProtocolError(
+            "battery thresholds must satisfy 1 <= critical_percent <= low_percent <= 99"
+        )
     for key in ("enabled", "make_default"):
         if not isinstance(normalized["spatial"].get(key), bool):
             raise ProtocolError(f"spatial {key} must be a boolean")

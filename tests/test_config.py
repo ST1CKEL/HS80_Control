@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from hs80_control.config import ConfigStore
+from hs80_control.config import ConfigStore, validate_config
 from hs80_control.protocol import ProtocolError
 
 
@@ -71,6 +71,35 @@ class ConfigTests(unittest.TestCase):
             self.assertFalse(store.snapshot()["spatial"]["make_default"])
             persisted = json.loads(path.read_text(encoding="utf-8"))
             self.assertFalse(persisted["spatial"]["make_default"])
+
+    def test_battery_warning_defaults_and_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            # A file written by an older release has no battery section.
+            path.write_text(json.dumps({"version": 1, "sleep": {"minutes": 30}}))
+            store = ConfigStore(path)
+            self.assertEqual(30, store.snapshot()["sleep"]["minutes"])
+            self.assertEqual(
+                {"notify": True, "low_percent": 20, "critical_percent": 10},
+                store.snapshot()["battery"],
+            )
+
+            path.write_text(json.dumps({"battery": {"low_percent": 30, "notify": False}}))
+            self.assertEqual(
+                {"notify": False, "low_percent": 30, "critical_percent": 10},
+                ConfigStore(path).snapshot()["battery"],
+            )
+
+        for battery in (
+            {"low_percent": 5},
+            {"critical_percent": 0},
+            {"low_percent": 100},
+            {"low_percent": True},
+            {"notify": "yes"},
+        ):
+            with self.subTest(battery=battery):
+                with self.assertRaises(ValueError):
+                    validate_config({"battery": battery})
 
 
 if __name__ == "__main__":

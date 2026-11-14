@@ -36,6 +36,11 @@
     <modalias>usb:v1B1Cp0A69d*</modalias>
   </provides>
   <releases>
+    <release version="0.4.0" date="2026-11-14">
+      <description>
+        <p>Warns with a desktop notification when the headset battery runs low, and again when it is almost empty. Connects to the headset right after login instead of up to a minute later.</p>
+      </description>
+    </release>
     <release version="0.3.1" date="2026-08-16">
       <description>
         <p>Backs off instead of probing an unresponsive headset every two seconds.</p>

@@ -20,6 +20,7 @@ from .alsa import AlsaMixer, MixerError
 from .controller import DeviceController
 from .dbus_service import BUS_NAME, HS80Service, OBJECT_PATH
 from .discovery import discover_hid_nodes
+from .notifications import BatteryNotifier, LowBatteryMonitor
 from .spatial import SpatialError, SpatialManager
 
 
@@ -61,6 +62,7 @@ async def run_daemon() -> int:
     controller = DeviceController()
     bus: MessageBus | None = None
     service: HS80Service | None = None
+    notifier: BatteryNotifier | None = None
     controller_started = False
     stopped = asyncio.Event()
     wait_tasks: list[asyncio.Task[object]] = []
@@ -81,6 +83,16 @@ async def run_daemon() -> int:
 
         if stopped.is_set():
             return 0
+        battery = controller.config.snapshot()["battery"]
+        if battery["notify"]:
+            notifier = BatteryNotifier(
+                bus,
+                controller.state,
+                loop,
+                LowBatteryMonitor(
+                    battery["low_percent"], battery["critical_percent"]
+                ),
+            )
         controller.start()
         controller_started = True
         LOG.info("hs80d %s is ready", __version__)
@@ -109,6 +121,9 @@ async def run_daemon() -> int:
                 await task
         if service is not None:
             service.begin_shutdown()
+        if notifier is not None:
+            notifier.close()
+            await notifier.wait_idle()
         if bus is not None:
             bus.unexport(OBJECT_PATH)
         if service is not None:

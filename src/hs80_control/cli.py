@@ -16,7 +16,7 @@ from dbus_next.aio import MessageBus
 from dbus_next.errors import DBusError
 
 from . import __version__
-from .config import RGB_MODES
+from .config import DEFAULT_CONFIG, RGB_MODES
 from .daemon import diagnostics
 from .dbus_service import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
 from .protocol import parse_color
@@ -24,6 +24,7 @@ from .protocol import parse_color
 
 DBUS_CALL_TIMEOUT_SECONDS = 30.0
 SPATIAL_DBUS_CALL_TIMEOUT_SECONDS = 60.0
+LOW_BATTERY_PERCENT = DEFAULT_CONFIG["battery"]["low_percent"]
 T = TypeVar("T")
 
 
@@ -147,7 +148,11 @@ def _print_status(status: dict[str, object], as_json: bool) -> None:
         print(
             f"Receiver: {'verbunden' if status.get('ReceiverConnected') else 'offline'}"
         )
-    print(f"Akku: {f'{battery} %' if battery >= 0 else 'unbekannt'}")
+    low = connected and 0 <= battery <= LOW_BATTERY_PERCENT and charging != 1
+    print(
+        f"Akku: {f'{battery} %' if battery >= 0 else 'unbekannt'}"
+        f"{' (niedrig, bitte laden)' if low else ''}"
+    )
     print(f"Laden: {('ja' if charging else 'nein') if charging >= 0 else 'unbekannt'}")
     print(f"Mikrofonarm: {('stumm' if microphone else 'aktiv') if microphone >= 0 else 'unbekannt'}")
     print(f"Firmware: {status.get('Firmware') or 'unbekannt'}")

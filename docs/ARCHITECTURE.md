@@ -152,6 +152,18 @@ Die Konfiguration wird in `~/.config/hs80-control/config.json` verwaltet:
 2. **Rechteabsicherung**: Das Verzeichnis `~/.config/hs80-control/` wird strikt mit Modus `0700` angelegt, Dateien mit `0600`.
 3. **Rollback-Fähigkeit**: Schlägt das Aktivieren einer neuen SOFA-HRTF-Konfiguration fehl, stellt `SpatialManager` die vorherige funktionierende Konfiguration und die WirePlumber-Standardausgabe automatisch wieder her.
 
+### Akkuwarnung
+
+Der Abschnitt `battery` steuert die Desktop-Benachrichtigung des Daemons (`notifications.py`, über `org.freedesktop.Notifications` auf dem Session-Bus):
+
+```json
+"battery": { "notify": true, "low_percent": 20, "critical_percent": 10 }
+```
+
+- Jede Stufe wird pro Entladung einmal gemeldet; „kritisch" ersetzt die „niedrig"-Meldung und ist als dringlich markiert.
+- Erneut scharf geschaltet wird durch Laden, einen Stand von mindestens `low_percent + 5` oder das Aus- und Wiedereinschalten des Headsets (frühestens nach 10 Minuten, damit eine wackelnde Funkverbindung nicht wiederholt warnt).
+- Während des Ladens und im USB-Kabelbetrieb wird nicht gewarnt. Änderungen an der Datei greifen nach `systemctl --user restart hs80d.service`.
+
 ---
 
 ## 5. Sicherheitsgrenzen

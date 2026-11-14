@@ -67,7 +67,7 @@ def _connection_presentation(
 
 
 def _battery_presentation(
-    percent: int, charging: int, connected: bool = True
+    percent: int, charging: int, connected: bool = True, low_percent: int = 20
 ) -> tuple[str, str]:
     if percent < 0:
         return "-- %", "Noch kein Akkureport"
@@ -76,6 +76,8 @@ def _battery_presentation(
         detail += " · letzter Stand"
     elif charging == 1:
         detail += " · lädt"
+    elif percent <= low_percent:
+        detail += " · niedrig, bitte laden"
     return f"{percent} %", detail
 
 
@@ -92,6 +94,8 @@ class BatteryRing(Gtk.DrawingArea):
         super().__init__()
         self.percent = -1
         self.charging = False
+        # Same threshold as the daemon's low-battery notification.
+        self.low_percent = 20
         self.set_content_width(160)
         self.set_content_height(160)
         self.set_draw_func(self._draw)
@@ -106,7 +110,7 @@ class BatteryRing(Gtk.DrawingArea):
     def _ring_color(self) -> tuple[float, float, float]:
         # Follow the active libadwaita theme: accent by default, semantic
         # colors when the battery is low or charging.
-        name = "error_bg_color" if 0 <= self.percent < 20 else (
+        name = "error_bg_color" if 0 <= self.percent <= self.low_percent else (
             "success_bg_color" if self.charging else "accent_bg_color"
         )
         found, rgba = self.get_style_context().lookup_color(name)
@@ -174,6 +178,9 @@ class HS80Window(Adw.ApplicationWindow):
         self.set_default_size(960, 700)
         self.set_size_request(420, 540)
         self.config = ConfigStore()
+        self.low_battery_percent = int(
+            self.config.snapshot()["battery"]["low_percent"]
+        )
         self.proxy: Gio.DBusProxy | None = None
         self._syncing = False
         self._lighting_dirty: set[str] = set()
@@ -359,6 +366,7 @@ class HS80Window(Adw.ApplicationWindow):
         battery_overlay.set_halign(Gtk.Align.CENTER)
         battery_overlay.set_valign(Gtk.Align.CENTER)
         self.battery_ring = BatteryRing()
+        self.battery_ring.low_percent = self.low_battery_percent
         battery_overlay.set_child(self.battery_ring)
         battery_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
         battery_text.set_halign(Gtk.Align.CENTER)
@@ -735,7 +743,10 @@ class HS80Window(Adw.ApplicationWindow):
         self.connection_label.remove_css_class("status-offline")
         self.connection_label.add_css_class(connection_class)
         battery_text, battery_detail = _battery_presentation(
-            battery, charging, connected=headset
+            battery,
+            charging,
+            connected=headset,
+            low_percent=self.low_battery_percent,
         )
         self.battery_label.set_label(battery_text)
         if not headset and battery >= 0:

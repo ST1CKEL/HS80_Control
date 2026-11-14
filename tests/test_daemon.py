@@ -9,9 +9,28 @@ from dbus_next.constants import NameFlag, RequestNameReply
 from hs80_control.daemon import run_daemon
 
 
+class FakeConfig:
+    def snapshot(self) -> dict[str, dict[str, object]]:
+        return {"battery": {"notify": True, "low_percent": 20, "critical_percent": 10}}
+
+
+class FakeNotifier:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+        self.events.append("notifier.create")
+
+    def close(self) -> None:
+        self.events.append("notifier.close")
+
+    async def wait_idle(self) -> None:
+        self.events.append("notifier.idle")
+
+
 class FakeController:
     def __init__(self, events: list[str]) -> None:
         self.events = events
+        self.config = FakeConfig()
+        self.state = object()
 
     def start(self) -> None:
         self.events.append("controller.start")
@@ -74,6 +93,10 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
                     controller, service_loop, events
                 ),
             ),
+            patch(
+                "hs80_control.daemon.BatteryNotifier",
+                side_effect=lambda *_arguments: FakeNotifier(events),
+            ),
             patch.object(loop, "add_signal_handler"),
             patch("hs80_control.daemon.LOG.error"),
         ):
@@ -83,6 +106,10 @@ class DaemonTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, result)
         self.assertLess(events.index(request), events.index("controller.start"))
         self.assertLess(events.index("service.shutdown"), events.index("controller.stop"))
+        # The notifier must exist before the worker can report a battery
+        # level, and be quiet before the bus goes away.
+        self.assertLess(events.index("notifier.create"), events.index("controller.start"))
+        self.assertLess(events.index("notifier.close"), events.index("bus.disconnect"))
         self.assertIn("controller.stop", events)
 
     async def test_name_conflict_never_starts_controller(self) -> None:

@@ -43,6 +43,7 @@ Die Suite umfasst einen leichtgewichtigen Hintergrunddienst (`hs80d`), eine asyn
 ## Funktionsübersicht
 
 - 🔋 **Echtzeit-Akkumonitoring**: Exakte prozentuale Ladestandsabfrage und dynamische Ladeanzeige über Hardware-Events und Heartbeats.
+- 🪫 **Warnung bei niedrigem Akkustand**: Desktop-Benachrichtigung des Daemons ab 20 % und dringlich ab 10 % – auch wenn das Fenster geschlossen ist. Schwellen in `config.json` unter `battery` einstellbar.
 - 💡 **Umfassende RGB-Steuerung**: 4 Modi (*Aus*, *Statisch*, *Pulsieren*, *Regenbogen*) mit feinstufiger Helligkeitsregelung und getrennt ansteuerbaren Farbzonen (*Logo*, *Statusanzeige*, *Mikrofon-LED*).
 - ⏱️ **Einstellbarer Sleep-Timer**: Automatische Abschaltung bei Inaktivität nach 0 bis 90 Minuten.
 - 🎙️ **Hardware-Sidetone (Zero-Latency Mic Monitoring)**: Direktes, latenzfreies Mithören des eigenen Mikrofons über ALSA im Bereich von `-42 dB` bis `+4 dB`.
@@ -356,7 +357,7 @@ graph LR
 ### Besondere Merkmale der UI
 
 - **Adaptive Breakpoints**: Ab einer Fensterbreite unter `600sp` wandert der Ansichten-Umschalter von der Kopfleiste automatisch in eine kompakte Fußleiste.
-- **Dynamischer Akkuring**: Visualisiert den Ladezustand farblich angepasst (unter 20 % Warnfarbe, beim Laden Erfolgsfarbe, ansonsten System-Akzentfarbe).
+- **Dynamischer Akkuring**: Visualisiert den Ladezustand farblich angepasst (ab 20 % und darunter Warnfarbe, beim Laden Erfolgsfarbe, ansonsten System-Akzentfarbe).
 - **Mute-Suppression Banner**: Erkennt, wenn das Mikrofon hochgeklappt ist, und weist darauf hin, dass die Firmware in diesem Zustand Beleuchtungsänderungen erst nach dem Herunterklappen anzeigt.
 - **Live D-Bus Synchronisation**: Ändern sich Einstellungen über CLI, Skripte oder Hardware-Tasten, aktualisiert sich die Oberfläche verzögerungsfrei in Echtzeit.
 
