@@ -4,6 +4,15 @@ Alle nennenswerten Änderungen an HS80 Control. Das Format folgt
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionen folgen
 [Semantic Versioning](https://semver.org/lang/de/).
 
+## [Unveröffentlicht]
+
+### Neu
+- Fedora-Paketquelle auf COPR: `sudo dnf copr enable stickel/hs80-control` und `sudo dnf install hs80-control`; Updates kommen danach mit `dnf upgrade`. Gebaut für Fedora 44 und 45.
+- `PKGBUILD` für Arch Linux in `packaging/aur/` (lokal mit `makepkg -si`).
+
+### Geändert
+- Die README ist jetzt englisch; die deutsche Fassung liegt in `README.de.md`. Beide beginnen mit einer Sprachauswahl.
+
 ## [0.9.0] – 2026-11-14
 
 ### Neu
