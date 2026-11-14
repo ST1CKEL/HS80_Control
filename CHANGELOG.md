@@ -4,6 +4,11 @@ Alle nennenswerten Änderungen an HS80 Control. Das Format folgt
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionen folgen
 [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.8.1] – 2026-11-14
+
+### Behoben
+- Installer: Bei einem Upgrade lief das alte Fenster weiter, und „nach der Installation starten" holte nur dieses nach vorn. Der Installer beendet jetzt eine laufende App und startet die neue Version.
+
 ## [0.8.0] – 2026-11-14
 
 ### Neu
@@ -117,6 +122,7 @@ Die Warnung ist standardmäßig aktiv, mit den Schwellen 20 % (niedrig) und 10 %
 
 - Erste Veröffentlichung.
 
+[0.8.1]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.8.1
 [0.8.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.8.0
 [0.7.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.7.0
 [0.6.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.6.0

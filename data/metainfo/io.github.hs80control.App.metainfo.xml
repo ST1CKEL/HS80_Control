@@ -37,6 +37,11 @@
     <modalias>usb:v1B1Cp0A69d*</modalias>
   </provides>
   <releases>
+    <release version="0.8.1" date="2026-11-14">
+      <description>
+        <p>The installer now quits a running application during an upgrade and starts the new version.</p>
+      </description>
+    </release>
     <release version="0.8.0" date="2026-11-14">
       <description>
         <p>The interface is now available in German and English; the language is chosen at first start and can be changed on the overview page. New versions can be found and installed from within the application. A graphical installer for Fedora with KDE Plasma or GNOME is available.</p>
