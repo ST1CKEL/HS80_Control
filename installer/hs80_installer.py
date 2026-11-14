@@ -283,6 +283,50 @@ def set_autostart(
     _atomic_write(user_path, "\n".join(lines) + "\nHidden=true\n")
 
 
+APP_BUS_NAME = "io.github.hs80control.App"
+APP_OBJECT_PATH = "/io/github/hs80control/App"
+
+
+def quit_running_app(connection: object = None) -> bool:
+    """Ask a running HS80 Control window to quit; True if there was one.
+
+    After an upgrade the old process still runs the old code, and starting
+    the application again would only raise that old window.
+    """
+
+    from gi.repository import Gio, GLib
+
+    try:
+        bus = connection or Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        owned = bus.call_sync(
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus",
+            "NameHasOwner",
+            GLib.Variant("(s)", (APP_BUS_NAME,)),
+            GLib.VariantType("(b)"),
+            Gio.DBusCallFlags.NONE,
+            3000,
+            None,
+        ).unpack()[0]
+        if not owned:
+            return False
+        bus.call_sync(
+            APP_BUS_NAME,
+            APP_OBJECT_PATH,
+            "org.freedesktop.Application",
+            "ActivateAction",
+            GLib.Variant("(sava{sv})", ("quit", [], {})),
+            None,
+            Gio.DBusCallFlags.NO_AUTO_START,
+            3000,
+            None,
+        )
+    except GLib.Error:
+        return False
+    return True
+
+
 def service_commands() -> list[list[str]]:
     return [
         ["systemctl", "--user", "daemon-reload"],
@@ -326,6 +370,7 @@ def run_gui(argv: list[str]) -> int:
             self.launch = True
             self.temporary: tempfile.TemporaryDirectory[str] | None = None
             self.busy = False
+            self.was_running = False
             self.connect("close-request", lambda *_: self.busy)
 
             toolbar = Adw.ToolbarView()
@@ -684,6 +729,10 @@ def run_gui(argv: list[str]) -> int:
             commands = service_commands()
             if os.environ.get(DRY_RUN_VARIABLE):
                 commands = [["/bin/echo", "[dry run]", *command] for command in commands]
+            elif quit_running_app():
+                # It ran the old version; bring the new one back afterwards.
+                self._log("HS80 Control: quit")
+                self.was_running = True
 
             def advance(success: bool = True, _status: int = 0) -> None:
                 if not commands:
@@ -731,9 +780,22 @@ def run_gui(argv: list[str]) -> int:
             self._replace_page("result", page)
 
         def _finish(self) -> None:
-            if self.launch and not os.environ.get(DRY_RUN_VARIABLE):
+            if (self.launch or self.was_running) and not os.environ.get(
+                DRY_RUN_VARIABLE
+            ):
+                arguments = "" if self.launch else " --background"
                 try:
-                    Gio.Subprocess.new(["hs80-control"], Gio.SubprocessFlags.NONE)
+                    # Detached and delayed: the old instance needs a moment
+                    # to leave the session bus.
+                    Gio.Subprocess.new(
+                        [
+                            "/bin/sh",
+                            "-c",
+                            f"sleep 1; exec setsid hs80-control{arguments} "
+                            ">/dev/null 2>&1",
+                        ],
+                        Gio.SubprocessFlags.NONE,
+                    )
                 except GLib.Error:
                     pass
             self.close()
