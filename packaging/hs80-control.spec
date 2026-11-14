@@ -1,5 +1,5 @@
 Name:           hs80-control
-Version:        0.7.1
+Version:        0.8.0
 Release:        1%{?dist}
 Summary:        Corsair HS80 RGB Wireless control service
 License:        GPL-3.0-or-later AND CC0-1.0
@@ -83,6 +83,10 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 %{_datadir}/icons/hicolor/scalable/apps/io.github.hs80control.App.svg
 
 %changelog
+* Sat Nov 14 2026 ST1CKEL - 0.8.0-1
+- Add English as a second interface language, chosen at first start
+- Add in-app updates from the GitHub releases
+- Add a graphical installer for Fedora KDE and GNOME
 * Sat Nov 14 2026 ST1CKEL - 0.7.1-1
 - Name Stickelbroeck Labs as the developer, with logo and website, in the About dialog
 * Sat Nov 14 2026 ST1CKEL - 0.7.0-1

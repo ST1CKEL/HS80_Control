@@ -6,6 +6,8 @@ from collections.abc import Callable
 import math
 from pathlib import Path
 import sys
+import tempfile
+import threading
 
 import gi
 
@@ -21,6 +23,8 @@ from .autostart import (
     Autostart,
 )
 from .config import ConfigStore
+from . import i18n, updater
+from .i18n import tr as _
 from .tray import TrayIcon, is_gnome, tooltip_text
 from .dbus_service import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
 
@@ -78,16 +82,16 @@ def _connection_presentation(
 ) -> tuple[str, str]:
     if headset:
         if mode == "usb":
-            return "●  Verbunden · USB-Kabel", "status-online"
-        return "●  Verbunden", "status-online"
+            return _("●  Verbunden · USB-Kabel"), "status-online"
+        return _("●  Verbunden"), "status-online"
     if wired:
         # The cable is the whole explanation, so it outranks the receiver
         # state in the label: neither case carries audio.
         if receiver:
-            return "●  Headset am Ladekabel · kein Ton", "status-standby"
-        return "●  Headset am Ladekabel · Receiver fehlt", "status-offline"
+            return _("●  Headset am Ladekabel · kein Ton"), "status-standby"
+        return _("●  Headset am Ladekabel · Receiver fehlt"), "status-offline"
     if receiver:
-        return "●  Receiver bereit · Headset offline", "status-standby"
+        return _("●  Receiver bereit · Headset offline"), "status-standby"
     return "●  Receiver offline", "status-offline"
 
 
@@ -95,42 +99,41 @@ def _battery_presentation(
     percent: int, charging: int, connected: bool = True, low_percent: int = 20
 ) -> tuple[str, str]:
     if percent < 0:
-        return "-- %", "Noch kein Akkureport"
-    detail = f"{percent} Prozent"
+        return "-- %", _("Noch kein Akkureport")
+    detail = _("{percent} Prozent").format(percent=percent)
     if not connected:
-        detail += " · letzter Stand"
+        detail += _(" · letzter Stand")
     elif charging == 1:
-        detail += " · lädt"
+        detail += _(" · lädt")
     elif percent <= low_percent:
-        detail += " · niedrig, bitte laden"
+        detail += _(" · niedrig, bitte laden")
     return f"{percent} %", detail
 
 
 def _battery_warning_subtitle(low_percent: int, critical_percent: int) -> str:
-    return (
-        f"Desktop-Benachrichtigung ab {low_percent} %, "
-        f"dringlich ab {critical_percent} %"
-    )
+    return _(
+        "Desktop-Benachrichtigung ab {low} %, dringlich ab {critical} %"
+    ).format(low=low_percent, critical=critical_percent)
 
 
 def _tray_subtitle(enabled: bool, available: bool, gnome: bool) -> str:
     if not enabled or available:
-        return "Schließen minimiert das Fenster, statt das Programm zu beenden"
+        return _("Schließen minimiert das Fenster, statt das Programm zu beenden")
     if gnome:
         return (
-            "Kein Infobereich gefunden – unter GNOME die Erweiterung "
+            _("Kein Infobereich gefunden – unter GNOME die Erweiterung "
             "„AppIndicator and KStatusNotifierItem Support“ installieren "
-            "und aktivieren"
+            "und aktivieren")
         )
-    return "Kein Infobereich gefunden – Schließen beendet das Programm"
+    return _("Kein Infobereich gefunden – Schließen beendet das Programm")
 
 
 def _microphone_presentation(muted: int) -> tuple[str, str]:
     if muted == 1:
-        return "Stummgeschaltet", "Arm hochgeklappt"
+        return _("Stummgeschaltet"), _("Arm hochgeklappt")
     if muted == 0:
-        return "Aktiv", "Arm heruntergeklappt"
-    return "Unbekannt", "Noch kein Hardwarestatus"
+        return _("Aktiv"), _("Arm heruntergeklappt")
+    return _("Unbekannt"), _("Noch kein Hardwarestatus")
 
 
 class BatteryRing(Gtk.DrawingArea):
@@ -195,8 +198,8 @@ def _lighting_mute_hint(microphone: int) -> str:
     # microphone arm is flipped up (muted); verified on firmware 5.8.48.
     if microphone == 1:
         return (
-            "Mikrofon ist hochgeklappt (stumm) – "
-            "Beleuchtung erscheint erst nach dem Runterklappen"
+            _("Mikrofon ist hochgeklappt (stumm) – "
+            "Beleuchtung erscheint erst nach dem Runterklappen")
         )
     return ""
 
@@ -252,7 +255,7 @@ class HS80Window(Adw.ApplicationWindow):
         )
 
         self.refresh_button = Gtk.Button.new_from_icon_name("view-refresh-symbolic")
-        self.refresh_button.set_tooltip_text("Status aktualisieren")
+        self.refresh_button.set_tooltip_text(_("Status aktualisieren"))
         self.refresh_button.connect("clicked", self._refresh)
         self.header.pack_end(self.refresh_button)
 
@@ -260,7 +263,7 @@ class HS80Window(Adw.ApplicationWindow):
             "network-wireless-symbolic"
         )
         self.reconnect_button.set_tooltip_text(
-            "Funkverbindung neu aufbauen und Headset suchen"
+            _("Funkverbindung neu aufbauen und Headset suchen")
         )
         self.reconnect_button.connect("clicked", self._reconnect)
         self.header.pack_end(self.reconnect_button)
@@ -269,13 +272,13 @@ class HS80Window(Adw.ApplicationWindow):
         about_action.connect("activate", self._show_about)
         self.add_action(about_action)
         menu = Gio.Menu()
-        menu.append("Über HS80 Control", "win.about")
+        menu.append(_("Über HS80 Control"), "win.about")
         # Closing the window only hides it while a tray is present.
-        menu.append("Beenden", "app.quit")
+        menu.append(_("Beenden"), "app.quit")
         menu_button = Gtk.MenuButton(
             icon_name="open-menu-symbolic", menu_model=menu, primary=True
         )
-        menu_button.set_tooltip_text("Hauptmenü")
+        menu_button.set_tooltip_text(_("Hauptmenü"))
         self.header.pack_end(menu_button)
 
         self.stack = Adw.ViewStack()
@@ -316,7 +319,7 @@ class HS80Window(Adw.ApplicationWindow):
     def _show_about(self, *_args: object) -> None:
         # Built by hand rather than with Adw.AboutDialog, which has no place
         # for the developer's logo.
-        dialog = Adw.Dialog(title="Über HS80 Control", content_width=440)
+        dialog = Adw.Dialog(title=_("Über HS80 Control"), content_width=440)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         box.set_margin_top(6)
@@ -335,8 +338,8 @@ class HS80Window(Adw.ApplicationWindow):
         box.append(version)
         comments = Gtk.Label(
             label=(
-                "Linux-Steuerung für das hardwaregetestete Corsair HS80 RGB "
-                "Wireless mit Receiver 1b1c:0a6b und Headset-PID 0a69."
+                _("Linux-Steuerung für das hardwaregetestete Corsair HS80 RGB "
+                "Wireless mit Receiver 1b1c:0a6b und Headset-PID 0a69.")
             ),
             wrap=True,
             justify=Gtk.Justification.CENTER,
@@ -345,7 +348,7 @@ class HS80Window(Adw.ApplicationWindow):
         comments.set_margin_bottom(12)
         box.append(comments)
 
-        developer = Adw.PreferencesGroup(title="Entwickelt von")
+        developer = Adw.PreferencesGroup(title=_("Entwickelt von"))
         row = self._link_row(DEVELOPER_NAME, DEVELOPER_DOMAIN, DEVELOPER_URL)
         if DEVELOPER_LOGO.is_file():
             logo = Gtk.Picture.new_for_filename(str(DEVELOPER_LOGO))
@@ -354,19 +357,21 @@ class HS80Window(Adw.ApplicationWindow):
             logo.set_valign(Gtk.Align.CENTER)
             logo.set_margin_top(8)
             logo.set_margin_bottom(8)
-            logo.set_alternative_text(f"Logo von {DEVELOPER_NAME}")
+            logo.set_alternative_text(
+                _("Logo von {name}").format(name=DEVELOPER_NAME)
+            )
             row.add_prefix(logo)
         developer.add(row)
         box.append(developer)
 
-        project = Adw.PreferencesGroup(title="Projekt")
+        project = Adw.PreferencesGroup(title=_("Projekt"))
         project.set_margin_top(12)
-        project.add(self._link_row("Quellcode", "github.com/ST1CKEL/HS80_Control", PROJECT_URL))
-        project.add(self._link_row("Fehler melden", "GitHub Issues", f"{PROJECT_URL}/issues"))
+        project.add(self._link_row(_("Quellcode"), "github.com/ST1CKEL/HS80_Control", PROJECT_URL))
+        project.add(self._link_row(_("Fehler melden"), "GitHub Issues", f"{PROJECT_URL}/issues"))
         project.add(
             self._link_row(
-                "Lizenz",
-                "GNU General Public License 3.0 oder neuer",
+                _("Lizenz"),
+                _("GNU General Public License 3.0 oder neuer"),
                 "https://www.gnu.org/licenses/gpl-3.0.html",
             )
         )
@@ -375,7 +380,7 @@ class HS80Window(Adw.ApplicationWindow):
         legal = Gtk.Label(
             label=(
                 f"© 2026 {DEVELOPER_NAME}\n"
-                "Dieses Programm wird ohne jegliche Gewährleistung bereitgestellt."
+                + _("Dieses Programm wird ohne jegliche Gewährleistung bereitgestellt.")
             ),
             wrap=True,
             justify=Gtk.Justification.CENTER,
@@ -481,7 +486,7 @@ class HS80Window(Adw.ApplicationWindow):
         product.add_css_class("title-3")
         receiver_note = Gtk.Label(label="Receiver 1b1c:0a6b", xalign=0)
         receiver_note.add_css_class("dim-label")
-        self.connection_label = Gtk.Label(label="Dienst wird verbunden ...", xalign=0)
+        self.connection_label = Gtk.Label(label=_("Dienst wird verbunden ..."), xalign=0)
         self.connection_label.add_css_class("connection-pill")
         self.connection_label.set_halign(Gtk.Align.START)
         self.hero_text.append(product)
@@ -502,7 +507,7 @@ class HS80Window(Adw.ApplicationWindow):
         battery_text.set_valign(Gtk.Align.CENTER)
         self.battery_label = Gtk.Label(label="-- %")
         self.battery_label.add_css_class("battery-value")
-        self.battery_caption = Gtk.Label(label="AKKU")
+        self.battery_caption = Gtk.Label(label=_("AKKU"))
         self.battery_caption.add_css_class("battery-caption")
         battery_text.append(self.battery_label)
         battery_text.append(self.battery_caption)
@@ -520,7 +525,7 @@ class HS80Window(Adw.ApplicationWindow):
         content.append(self.audio_error_banner)
         content.append(self.spatial_error_banner)
 
-        content.append(self._section_title("Gerätestatus"))
+        content.append(self._section_title(_("Gerätestatus")))
         status = Gtk.FlowBox()
         status.set_selection_mode(Gtk.SelectionMode.NONE)
         status.set_activate_on_single_click(False)
@@ -531,7 +536,7 @@ class HS80Window(Adw.ApplicationWindow):
         status.set_row_spacing(12)
 
         battery_card, self.battery_card_value, self.battery_card_detail, battery_box = (
-            self._status_card("battery-good-symbolic", "Akku")
+            self._status_card("battery-good-symbolic", _("Akku"))
         )
         self.battery_progress = Gtk.ProgressBar()
         self.battery_progress.set_size_request(110, -1)
@@ -539,26 +544,26 @@ class HS80Window(Adw.ApplicationWindow):
         battery_box.append(self.battery_progress)
         status.append(battery_card)
 
-        mic_card, self.mic_card_value, self.mic_card_detail, _ = self._status_card(
-            "audio-input-microphone-symbolic", "Mikrofonarm"
+        mic_card, self.mic_card_value, self.mic_card_detail, _box = self._status_card(
+            "audio-input-microphone-symbolic", _("Mikrofonarm")
         )
         status.append(mic_card)
-        firmware_card, self.firmware_card_value, self.firmware_card_detail, _ = (
-            self._status_card("computer-symbolic", "Headset-Firmware")
+        firmware_card, self.firmware_card_value, self.firmware_card_detail, _box = (
+            self._status_card("computer-symbolic", _("Headset-Firmware"))
         )
         status.append(firmware_card)
-        receiver_card, self.receiver_card_value, self.receiver_card_detail, _ = (
+        receiver_card, self.receiver_card_value, self.receiver_card_detail, _box = (
             self._status_card("network-server-symbolic", "Receiver")
         )
         status.append(receiver_card)
         content.append(status)
 
-        content.append(self._section_title("Benachrichtigungen"))
+        content.append(self._section_title(_("Benachrichtigungen")))
         notifications = Gtk.ListBox()
         notifications.add_css_class("boxed-list")
         notifications.set_selection_mode(Gtk.SelectionMode.NONE)
         self.battery_notify_switch = Adw.SwitchRow(
-            title="Warnung bei niedrigem Akkustand",
+            title=_("Warnung bei niedrigem Akkustand"),
             subtitle=_battery_warning_subtitle(
                 self.low_battery_percent, self.critical_battery_percent
             ),
@@ -572,20 +577,20 @@ class HS80Window(Adw.ApplicationWindow):
         notifications.append(self.battery_notify_switch)
         content.append(notifications)
 
-        content.append(self._section_title("Programmstart"))
+        content.append(self._section_title(_("Programmstart")))
         startup = Gtk.ListBox()
         startup.add_css_class("boxed-list")
         startup.set_selection_mode(Gtk.SelectionMode.NONE)
         self.tray_switch = Adw.SwitchRow(
-            title="Im Infobereich der Taskleiste weiterlaufen"
+            title=_("Im Infobereich der Taskleiste weiterlaufen")
         )
         self.tray_switch.set_active(self.app.settings.tray)
         self.tray_availability_changed()
         self.tray_switch.connect("notify::active", self._tray_toggled)
         startup.append(self.tray_switch)
         self.autostart_switch = Adw.SwitchRow(
-            title="Beim Anmelden automatisch starten",
-            subtitle="Startet minimiert im Infobereich",
+            title=_("Beim Anmelden automatisch starten"),
+            subtitle=_("Startet minimiert im Infobereich"),
         )
         self.autostart_switch.set_active(self.app.autostart.is_enabled())
         # Without a tray icon a hidden start would leave nothing to click.
@@ -594,15 +599,59 @@ class HS80Window(Adw.ApplicationWindow):
         startup.append(self.autostart_switch)
         content.append(startup)
 
-        content.append(self._section_title("Schnellaktionen"))
+        content.append(self._section_title(_("Sprache")))
+        language_list = Gtk.ListBox()
+        language_list.add_css_class("boxed-list")
+        language_list.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.language_row = Adw.ComboRow(
+            title=_("Sprache der Oberfläche"),
+            subtitle=_(
+                "Gilt für Fenster, Infobereich, Benachrichtigungen und hs80ctl"
+            ),
+        )
+        self.language_row.set_model(
+            Gtk.StringList.new(list(i18n.LANGUAGES.values()))
+        )
+        self.language_row.set_selected(list(i18n.LANGUAGES).index(i18n.language()))
+        self.language_row.connect("notify::selected", self._language_selected)
+        language_list.append(self.language_row)
+        content.append(language_list)
+
+        content.append(self._section_title(_("Updates")))
+        updates = Gtk.ListBox()
+        updates.add_css_class("boxed-list")
+        updates.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.update_row = Adw.ActionRow(
+            title=_("Version {version}").format(version=__version__),
+            subtitle=_("Neue Versionen kommen von der GitHub-Seite des Projekts"),
+        )
+        self.update_spinner = Gtk.Spinner(visible=False)
+        self.update_row.add_suffix(self.update_spinner)
+        self.update_button = Gtk.Button(label=_("Nach Updates suchen"))
+        self.update_button.set_valign(Gtk.Align.CENTER)
+        self.update_button.connect("clicked", self._update_clicked)
+        self.update_row.add_suffix(self.update_button)
+        updates.append(self.update_row)
+        self.update_check_switch = Adw.SwitchRow(
+            title=_("Beim Start nach Updates suchen"),
+            subtitle=_("Fragt einmal pro Programmstart bei GitHub nach"),
+        )
+        self.update_check_switch.set_active(self.app.settings.update_check)
+        self.update_check_switch.connect("notify::active", self._update_check_toggled)
+        updates.append(self.update_check_switch)
+        content.append(updates)
+        if self.app.update_release is not None:
+            self._offer_update(self.app.update_release)
+
+        content.append(self._section_title(_("Schnellaktionen")))
         self.quick_action = Gtk.ListBox()
         self.quick_action.add_css_class("boxed-list")
         self.quick_action.set_selection_mode(Gtk.SelectionMode.NONE)
         quick_row = Adw.ActionRow(
-            title="Beleuchtung ausschalten",
-            subtitle="Reduziert den Akkuverbrauch des Headsets",
+            title=_("Beleuchtung ausschalten"),
+            subtitle=_("Reduziert den Akkuverbrauch des Headsets"),
         )
-        self.quick_button = Gtk.Button(label="RGB ausschalten")
+        self.quick_button = Gtk.Button(label=_("RGB ausschalten"))
         self.quick_button.set_valign(Gtk.Align.CENTER)
         self.quick_button.add_css_class("suggested-action")
         self.quick_button.connect("clicked", self._quick_rgb_off)
@@ -610,7 +659,7 @@ class HS80Window(Adw.ApplicationWindow):
         quick_row.set_activatable_widget(self.quick_button)
         self.quick_action.append(quick_row)
         content.append(self.quick_action)
-        self.stack.add_titled(page, "overview", "Übersicht").set_icon_name(
+        self.stack.add_titled(page, "overview", _("Übersicht")).set_icon_name(
             "view-dashboard-symbolic"
         )
 
@@ -619,10 +668,10 @@ class HS80Window(Adw.ApplicationWindow):
         settings = self.config.snapshot()["rgb"]
 
         profiles = Adw.PreferencesGroup(
-            title="Profile",
-            description="Gespeicherte Kombinationen aus Modus, Helligkeit, Tempo und Farben.",
+            title=_("Profile"),
+            description=_("Gespeicherte Kombinationen aus Modus, Helligkeit, Tempo und Farben."),
         )
-        profile_row = Adw.ActionRow(title="Profil laden")
+        profile_row = Adw.ActionRow(title=_("Profil laden"))
         self.profile_model = Gtk.StringList()
         self.profile_dropdown = Gtk.DropDown(model=self.profile_model)
         self.profile_dropdown.set_valign(Gtk.Align.CENTER)
@@ -631,14 +680,14 @@ class HS80Window(Adw.ApplicationWindow):
         self.profile_delete_button = Gtk.Button.new_from_icon_name(
             "user-trash-symbolic"
         )
-        self.profile_delete_button.set_tooltip_text("Ausgewähltes Profil löschen")
+        self.profile_delete_button.set_tooltip_text(_("Ausgewähltes Profil löschen"))
         self.profile_delete_button.set_valign(Gtk.Align.CENTER)
         self.profile_delete_button.add_css_class("flat")
         self.profile_delete_button.connect("clicked", self._delete_profile)
         profile_row.add_suffix(self.profile_delete_button)
         profiles.add(profile_row)
-        save_row = Adw.ActionRow(title="Aktuelle Beleuchtung als Profil speichern")
-        save_button = Gtk.Button(label="Speichern …")
+        save_row = Adw.ActionRow(title=_("Aktuelle Beleuchtung als Profil speichern"))
+        save_button = Gtk.Button(label=_("Speichern …"))
         save_button.set_valign(Gtk.Align.CENTER)
         save_button.connect("clicked", self._save_profile_dialog)
         save_row.add_suffix(save_button)
@@ -648,14 +697,16 @@ class HS80Window(Adw.ApplicationWindow):
         self._reload_profiles()
 
         group = Adw.PreferencesGroup(
-            title="Beleuchtung",
+            title=_("Beleuchtung"),
             description=(
-                "Änderungen wirken sofort. Die Effekte erzeugt der Daemon; "
-                "statische Farben sparen Akku."
+                _("Änderungen wirken sofort. Die Effekte erzeugt der Daemon; "
+                "statische Farben sparen Akku.")
             ),
         )
-        mode_row = Adw.ActionRow(title="Modus")
-        self.rgb_mode = Gtk.DropDown.new_from_strings(list(RGB_MODE_LABELS))
+        mode_row = Adw.ActionRow(title=_("Modus"))
+        self.rgb_mode = Gtk.DropDown.new_from_strings(
+            [_(label) for label in RGB_MODE_LABELS]
+        )
         self.rgb_mode.set_valign(Gtk.Align.CENTER)
         modes = list(RGB_MODE_ORDER)
         self.rgb_mode.set_selected(modes.index(settings["mode"]))
@@ -666,7 +717,7 @@ class HS80Window(Adw.ApplicationWindow):
         mode_row.set_activatable_widget(self.rgb_mode)
         group.add(mode_row)
 
-        brightness_row = Adw.ActionRow(title="Helligkeit")
+        brightness_row = Adw.ActionRow(title=_("Helligkeit"))
         self.rgb_brightness = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
         self.rgb_brightness.set_value(settings["brightness"])
         self.rgb_brightness.set_draw_value(True)
@@ -680,13 +731,13 @@ class HS80Window(Adw.ApplicationWindow):
         group.add(brightness_row)
 
         self.speed_row = Adw.ActionRow(
-            title="Tempo", subtitle="Für Pulsieren, Regenbogen und Farbwechsel"
+            title="Tempo", subtitle=_("Für Pulsieren, Regenbogen und Farbwechsel")
         )
         self.rgb_speed = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 1, 5, 1)
         self.rgb_speed.set_value(settings["speed"])
         self.rgb_speed.set_round_digits(0)
         self.rgb_speed.set_draw_value(False)
-        for mark, label in ((1, "langsam"), (3, None), (5, "schnell")):
+        for mark, label in ((1, _("langsam")), (3, None), (5, _("schnell"))):
             self.rgb_speed.add_mark(mark, Gtk.PositionType.BOTTOM, label)
         self.rgb_speed.set_size_request(260, -1)
         self.rgb_speed.set_valign(Gtk.Align.CENTER)
@@ -698,19 +749,19 @@ class HS80Window(Adw.ApplicationWindow):
 
         self.logo_color = self._color_row(group, "Logo", settings["logo"], "logo")
         self.indicator_color = self._color_row(
-            group, "Statusanzeige", settings["indicator"], "indicator"
+            group, _("Statusanzeige"), settings["indicator"], "indicator"
         )
         self.microphone_color = self._color_row(
-            group, "Mikrofon-LED", settings["microphone"], "microphone"
+            group, _("Mikrofon-LED"), settings["microphone"], "microphone"
         )
         page.add(group)
 
         mute = Adw.PreferencesGroup(
-            title="Stummanzeige",
-            description="Zeigt an der Mikrofon-LED, dass das Mikrofon stumm ist.",
+            title=_("Stummanzeige"),
+            description=_("Zeigt an der Mikrofon-LED, dass das Mikrofon stumm ist."),
         )
         self.mute_indicator_switch = Adw.SwitchRow(
-            title="Mikrofon-LED bei Stummschaltung umfärben"
+            title=_("Mikrofon-LED bei Stummschaltung umfärben")
         )
         self.mute_indicator_switch.set_active(settings["mute_indicator"])
         self.mute_indicator_switch.connect(
@@ -718,17 +769,19 @@ class HS80Window(Adw.ApplicationWindow):
         )
         mute.add(self.mute_indicator_switch)
         self.mute_color = self._color_row(
-            mute, "Farbe bei Stummschaltung", settings["mute_color"], "mute_color"
+            mute, _("Farbe bei Stummschaltung"), settings["mute_color"], "mute_color"
         )
         page.add(mute)
 
-        power = Adw.PreferencesGroup(title="Energie")
+        power = Adw.PreferencesGroup(title=_("Energie"))
         saver_row = Adw.ActionRow(
-            title="Beleuchtung bei niedrigem Akkustand",
-            subtitle=f"Ab {self.low_battery_percent} %, nicht während des Ladens",
+            title=_("Beleuchtung bei niedrigem Akkustand"),
+            subtitle=_("Ab {percent} %, nicht während des Ladens").format(
+                percent=self.low_battery_percent
+            ),
         )
         self.battery_saver = Gtk.DropDown.new_from_strings(
-            list(BATTERY_SAVER_LABELS)
+            [_(label) for label in BATTERY_SAVER_LABELS]
         )
         self.battery_saver.set_valign(Gtk.Align.CENTER)
         self.battery_saver.set_selected(
@@ -741,8 +794,8 @@ class HS80Window(Adw.ApplicationWindow):
         saver_row.set_activatable_widget(self.battery_saver)
         power.add(saver_row)
         sleep_row = Adw.ActionRow(
-            title="Automatisch ausschalten",
-            subtitle="0 deaktiviert den Timer; maximal 90 Minuten",
+            title=_("Automatisch ausschalten"),
+            subtitle=_("0 deaktiviert den Timer; maximal 90 Minuten"),
         )
         self.sleep_spin = Gtk.SpinButton.new_with_range(0, 90, 1)
         self.sleep_spin.set_value(self.config.snapshot()["sleep"]["minutes"])
@@ -771,7 +824,7 @@ class HS80Window(Adw.ApplicationWindow):
         setting: str,
     ) -> Gtk.ColorDialogButton:
         row = Adw.ActionRow(title=title)
-        dialog = Gtk.ColorDialog(title=f"{title} auswählen", with_alpha=False)
+        dialog = Gtk.ColorDialog(title=_("{title} auswählen").format(title=title), with_alpha=False)
         button = Gtk.ColorDialogButton(dialog=dialog)
         button.set_rgba(_rgba(value))
         button.connect(
@@ -787,15 +840,15 @@ class HS80Window(Adw.ApplicationWindow):
     def _build_microphone_page(self) -> None:
         page = Adw.PreferencesPage()
         monitoring = Adw.PreferencesGroup(
-            title="Hardware-Sidetone",
-            description="Direktes Mikrofon-Monitoring ohne PipeWire-Latenz.",
+            title=_("Hardware-Sidetone"),
+            description=_("Direktes Mikrofon-Monitoring ohne PipeWire-Latenz."),
         )
-        self.sidetone_switch = Adw.SwitchRow(title="Sidetone aktivieren")
+        self.sidetone_switch = Adw.SwitchRow(title=_("Sidetone aktivieren"))
         self.sidetone_switch.connect(
             "notify::active", lambda *_: self._microphone_changed("sidetone_enabled")
         )
         monitoring.add(self.sidetone_switch)
-        sidetone_level = Adw.ActionRow(title="Sidetone-Pegel", subtitle="-42 bis +4 dB")
+        sidetone_level = Adw.ActionRow(title=_("Sidetone-Pegel"), subtitle=_("-42 bis +4 dB"))
         self.sidetone_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, -42, 4, 2)
         self.sidetone_scale.set_draw_value(True)
         self.sidetone_scale.set_digits(0)
@@ -807,8 +860,8 @@ class HS80Window(Adw.ApplicationWindow):
         monitoring.add(sidetone_level)
         page.add(monitoring)
 
-        microphone = Adw.PreferencesGroup(title="Mikrofon")
-        gain_row = Adw.ActionRow(title="Hardware-Verstärkung", subtitle="-36 bis 0 dB")
+        microphone = Adw.PreferencesGroup(title=_("Mikrofon"))
+        gain_row = Adw.ActionRow(title=_("Hardware-Verstärkung"), subtitle=_("-36 bis 0 dB"))
         self.mic_gain_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, -36, 0, 1)
         self.mic_gain_scale.set_draw_value(True)
         self.mic_gain_scale.set_digits(0)
@@ -819,8 +872,8 @@ class HS80Window(Adw.ApplicationWindow):
         gain_row.add_suffix(self.mic_gain_scale)
         microphone.add(gain_row)
         self.mic_mute_switch = Adw.SwitchRow(
-            title="Aufnahme stummschalten",
-            subtitle="Schaltet den ALSA-Capture-Kanal, unabhängig vom Mikrofonarm",
+            title=_("Aufnahme stummschalten"),
+            subtitle=_("Schaltet den ALSA-Capture-Kanal, unabhängig vom Mikrofonarm"),
         )
         self.mic_mute_switch.connect(
             "notify::active", lambda *_: self._microphone_changed("mic_mute")
@@ -829,11 +882,11 @@ class HS80Window(Adw.ApplicationWindow):
         page.add(microphone)
 
         processing = Adw.PreferencesGroup(
-            title="Sprachbearbeitung",
-            description="RNNoise, Gate und Kompressor werden über EasyEffects konfiguriert.",
+            title=_("Sprachbearbeitung"),
+            description=_("RNNoise, Gate und Kompressor werden über EasyEffects konfiguriert."),
         )
-        effects_row = Adw.ActionRow(title="EasyEffects öffnen")
-        effects_button = Gtk.Button(label="Öffnen")
+        effects_row = Adw.ActionRow(title=_("EasyEffects öffnen"))
+        effects_button = Gtk.Button(label=_("Öffnen"))
         effects_button.set_valign(Gtk.Align.CENTER)
         effects_button.connect("clicked", self._open_easyeffects)
         effects_row.add_suffix(effects_button)
@@ -842,8 +895,8 @@ class HS80Window(Adw.ApplicationWindow):
         page.add(processing)
 
         actions = Adw.PreferencesGroup()
-        apply_row = Adw.ActionRow(title="Mikrofoneinstellungen anwenden")
-        apply = Gtk.Button(label="Anwenden")
+        apply_row = Adw.ActionRow(title=_("Mikrofoneinstellungen anwenden"))
+        apply = Gtk.Button(label=_("Anwenden"))
         self.microphone_apply_button = apply
         apply.add_css_class("suggested-action")
         apply.set_valign(Gtk.Align.CENTER)
@@ -851,38 +904,38 @@ class HS80Window(Adw.ApplicationWindow):
         apply_row.add_suffix(apply)
         actions.add(apply_row)
         page.add(actions)
-        self.stack.add_titled(page, "microphone", "Mikrofon").set_icon_name(
+        self.stack.add_titled(page, "microphone", _("Mikrofon")).set_icon_name(
             "audio-input-microphone-symbolic"
         )
 
     def _build_spatial_page(self) -> None:
         page = Adw.PreferencesPage()
         group = Adw.PreferencesGroup(
-            title="Binaurales 7.1",
+            title=_("Binaurales 7.1"),
             description=(
-                "PipeWire faltet acht Lautsprecherpositionen mit einer SOFA-HRTF auf Stereo. "
-                "Dies ist kein Dolby-Atmos-Decoder."
+                _("PipeWire faltet acht Lautsprecherpositionen mit einer SOFA-HRTF auf Stereo. "
+                "Dies ist kein Dolby-Atmos-Decoder.")
             ),
         )
         self.spatial_switch = Adw.SwitchRow(
             title="HS80 Spatial 7.1",
-            subtitle="Erzeugt ein virtuelles 8-Kanal-Ausgabegerät",
+            subtitle=_("Erzeugt ein virtuelles 8-Kanal-Ausgabegerät"),
         )
         self.spatial_switch.connect("notify::active", self._spatial_toggled)
         group.add(self.spatial_switch)
 
         self.spatial_default_switch = Adw.SwitchRow(
-            title="Als Standardausgabe verwenden",
-            subtitle="Gilt ab der nächsten Aktivierung von Spatial Audio",
+            title=_("Als Standardausgabe verwenden"),
+            subtitle=_("Gilt ab der nächsten Aktivierung von Spatial Audio"),
         )
         self.spatial_default_switch.connect(
             "notify::active", self._spatial_default_toggled
         )
         group.add(self.spatial_default_switch)
 
-        hrtf_row = Adw.ActionRow(title="SOFA-HRTF", subtitle="Keine Datei ausgewählt")
+        hrtf_row = Adw.ActionRow(title="SOFA-HRTF", subtitle=_("Keine Datei ausgewählt"))
         self.hrtf_row = hrtf_row
-        choose = Gtk.Button(label="Auswählen")
+        choose = Gtk.Button(label=_("Auswählen"))
         choose.set_valign(Gtk.Align.CENTER)
         choose.connect("clicked", self._choose_sofa)
         hrtf_row.add_suffix(choose)
@@ -890,10 +943,10 @@ class HS80Window(Adw.ApplicationWindow):
         group.add(hrtf_row)
         page.add(group)
 
-        note = Adw.PreferencesGroup(title="Wiedergabehinweis")
+        note = Adw.PreferencesGroup(title=_("Wiedergabehinweis"))
         note_row = Adw.ActionRow(
-            title="Für echtes Surround muss das Spiel 5.1 oder 7.1 PCM ausgeben.",
-            subtitle="Stereo wird absichtlich nicht künstlich hochgemischt.",
+            title=_("Für echtes Surround muss das Spiel 5.1 oder 7.1 PCM ausgeben."),
+            subtitle=_("Stereo wird absichtlich nicht künstlich hochgemischt."),
         )
         note.add(note_row)
         page.add(note)
@@ -918,14 +971,16 @@ class HS80Window(Adw.ApplicationWindow):
             self._sync_state()
         except GLib.Error as exc:
             self.proxy = None
-            self.error_banner.set_title(f"Steuerdienst nicht erreichbar: {exc.message}")
+            self.error_banner.set_title(
+                _("Steuerdienst nicht erreichbar: {error}").format(error=exc.message)
+            )
             self.error_banner.set_revealed(True)
             self.audio_error_banner.set_title(
-                "Audio: Status ohne Steuerdienst nicht verfügbar"
+                _("Audio: Status ohne Steuerdienst nicht verfügbar")
             )
             self.audio_error_banner.set_revealed(True)
             self.spatial_error_banner.set_title(
-                "Spatial: Status ohne Steuerdienst nicht verfügbar"
+                _("Spatial: Status ohne Steuerdienst nicht verfügbar")
             )
             self.spatial_error_banner.set_revealed(True)
             self.battery_notify_switch.set_sensitive(False)
@@ -1018,8 +1073,8 @@ class HS80Window(Adw.ApplicationWindow):
 
     def _save_profile_dialog(self, _button: Gtk.Button) -> None:
         dialog = Adw.AlertDialog(
-            heading="Profil speichern",
-            body="Ein vorhandenes Profil gleichen Namens wird überschrieben.",
+            heading=_("Profil speichern"),
+            body=_("Ein vorhandenes Profil gleichen Namens wird überschrieben."),
         )
         entry = Gtk.Entry(placeholder_text="Name", max_length=PROFILE_NAME_LENGTH)
         entry.set_activates_default(True)
@@ -1027,8 +1082,8 @@ class HS80Window(Adw.ApplicationWindow):
         if 0 <= index < len(self._profile_names):
             entry.set_text(self._profile_names[index])
         dialog.set_extra_child(entry)
-        dialog.add_response("cancel", "Abbrechen")
-        dialog.add_response("save", "Speichern")
+        dialog.add_response("cancel", _("Abbrechen"))
+        dialog.add_response("save", _("Speichern"))
         dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
         dialog.set_default_response("save")
         dialog.set_close_response("cancel")
@@ -1044,7 +1099,7 @@ class HS80Window(Adw.ApplicationWindow):
                 return
             self._reload_profiles(select=name)
             self.toast_overlay.add_toast(
-                Adw.Toast(title=f"Profil „{name}“ gespeichert")
+                Adw.Toast(title=_("Profil „{name}“ gespeichert").format(name=name))
             )
 
         dialog.connect("response", responded)
@@ -1061,7 +1116,9 @@ class HS80Window(Adw.ApplicationWindow):
             self.toast_overlay.add_toast(Adw.Toast(title=str(exc), timeout=5))
             return
         self._reload_profiles()
-        self.toast_overlay.add_toast(Adw.Toast(title=f"Profil „{name}“ gelöscht"))
+        self.toast_overlay.add_toast(Adw.Toast(
+                title=_("Profil „{name}“ gelöscht").format(name=name)
+            ))
 
     def _set_microphone_controls_sensitive(self, sensitive: bool) -> None:
         self.sidetone_switch.set_sensitive(sensitive)
@@ -1101,9 +1158,9 @@ class HS80Window(Adw.ApplicationWindow):
         )
         self.battery_label.set_label(battery_text)
         if not headset and battery >= 0:
-            self.battery_caption.set_label("LETZTER STAND")
+            self.battery_caption.set_label(_("LETZTER STAND"))
         else:
-            self.battery_caption.set_label("LÄDT" if charging == 1 else "AKKU")
+            self.battery_caption.set_label(_("LÄDT") if charging == 1 else _("AKKU"))
         self.battery_ring.set_percent(battery, charging == 1)
         self.battery_progress.set_fraction(max(0, battery) / 100 if battery >= 0 else 0)
         self.battery_card_value.set_label(battery_text)
@@ -1118,7 +1175,7 @@ class HS80Window(Adw.ApplicationWindow):
         self.lighting_mute_banner.set_revealed(bool(mute_hint))
         self.firmware_card_value.set_label(firmware or "--")
         self.firmware_card_detail.set_label(
-            "Gerätefirmware" if firmware else "Noch nicht initialisiert"
+            _("Gerätefirmware") if firmware else _("Noch nicht initialisiert")
         )
         self.receiver_card_value.set_label(receiver_firmware or "--")
         if receiver_firmware:
@@ -1126,16 +1183,16 @@ class HS80Window(Adw.ApplicationWindow):
         elif mode == "usb":
             # No receiver is involved in cable mode; "not initialised" would
             # read like a fault.
-            receiver_detail = "Nicht verwendet · USB-Kabel"
+            receiver_detail = _("Nicht verwendet · USB-Kabel")
         else:
-            receiver_detail = "Nicht initialisiert"
+            receiver_detail = _("Nicht initialisiert")
         self.receiver_card_detail.set_label(receiver_detail)
         self.error_banner.set_title(error)
         self.error_banner.set_revealed(bool(error))
         self.audio_error_banner.set_title(
             f"Audio: {audio_error}"
             if audio_error
-            else "Audio: ALSA-Mixer nicht verfügbar"
+            else _("Audio: ALSA-Mixer nicht verfügbar")
         )
         self.audio_error_banner.set_revealed(bool(audio_error) or not mixer_available)
         self.spatial_error_banner.set_title(f"Spatial: {spatial_error}")
@@ -1153,7 +1210,7 @@ class HS80Window(Adw.ApplicationWindow):
             bool(self._property("SpatialMakeDefault", True))
         )
         sofa_file = str(self._property("SpatialSofaFile", ""))
-        self.hrtf_row.set_subtitle(sofa_file or "Keine Datei ausgewählt")
+        self.hrtf_row.set_subtitle(sofa_file or _("Keine Datei ausgewählt"))
         if not self._lighting_apply_pending:
             modes = list(RGB_MODE_ORDER)
             if "mode" not in self._lighting_dirty:
@@ -1220,6 +1277,9 @@ class HS80Window(Adw.ApplicationWindow):
         self._syncing = False
 
     def _poll(self) -> bool:
+        if self.app.window is not self:
+            # Replaced by a window in another language.
+            return GLib.SOURCE_REMOVE
         if self.proxy is None or not self.proxy.get_name_owner():
             self._connect_dbus()
         else:
@@ -1246,7 +1306,7 @@ class HS80Window(Adw.ApplicationWindow):
         if self.proxy is None:
             try:
                 self.toast_overlay.add_toast(
-                    Adw.Toast(title="Steuerdienst ist nicht erreichbar")
+                    Adw.Toast(title=_("Steuerdienst ist nicht erreichbar"))
                 )
             finally:
                 complete(False, False)
@@ -1261,9 +1321,9 @@ class HS80Window(Adw.ApplicationWindow):
                 applied = bool(unpacked[0]) if unpacked else True
                 if show_result:
                     message = (
-                        "Einstellung angewendet"
+                        _("Einstellung angewendet")
                         if applied
-                        else "Profil für nächste Verbindung gespeichert"
+                        else _("Profil für nächste Verbindung gespeichert")
                     )
                     self.toast_overlay.add_toast(Adw.Toast(title=message))
                 self._sync_state()
@@ -1305,9 +1365,9 @@ class HS80Window(Adw.ApplicationWindow):
             self.toast_overlay.add_toast(
                 Adw.Toast(
                     title=(
-                        "Headset verbunden"
+                        _("Headset verbunden")
                         if applied
-                        else "Kein Headset gefunden - eingeschaltet und in Reichweite?"
+                        else _("Kein Headset gefunden - eingeschaltet und in Reichweite?")
                     ),
                     timeout=5,
                 )
@@ -1341,9 +1401,9 @@ class HS80Window(Adw.ApplicationWindow):
 
     def _show_apply_result(self, applied: bool) -> None:
         message = (
-            "Einstellung angewendet"
+            _("Einstellung angewendet")
             if applied
-            else "Profil für nächste Verbindung gespeichert"
+            else _("Profil für nächste Verbindung gespeichert")
         )
         self.toast_overlay.add_toast(Adw.Toast(title=message))
 
@@ -1374,7 +1434,9 @@ class HS80Window(Adw.ApplicationWindow):
         except (AttributeError, IndexError, TypeError, ValueError) as exc:
             self.toast_overlay.add_toast(
                 Adw.Toast(
-                    title=f"Beleuchtungsprofil konnte nicht gelesen werden: {exc}",
+                    title=_(
+                        "Beleuchtungsprofil konnte nicht gelesen werden: {error}"
+                    ).format(error=exc),
                     timeout=5,
                 )
             )
@@ -1487,6 +1549,169 @@ class HS80Window(Adw.ApplicationWindow):
             return True
         return False
 
+    def _update_check_toggled(self, row: Adw.SwitchRow, _property: object) -> None:
+        try:
+            self.app.settings.set_update_check(row.get_active())
+        except OSError as exc:
+            self.toast_overlay.add_toast(Adw.Toast(title=str(exc), timeout=5))
+
+    def _update_busy(self, busy: bool) -> None:
+        self.update_button.set_sensitive(not busy)
+        self.update_spinner.set_visible(busy)
+        if busy:
+            self.update_spinner.start()
+        else:
+            self.update_spinner.stop()
+
+    def _offer_update(self, release: updater.Release) -> None:
+        self.update_row.set_subtitle(
+            _("Version {version} ist verfügbar").format(version=release.version)
+        )
+        self.update_button.set_label(
+            _("Installieren") if updater.is_packaged() else _("Zur Download-Seite")
+        )
+        self.update_button.add_css_class("suggested-action")
+
+    def _update_clicked(self, _button: Gtk.Button) -> None:
+        release = self.app.update_release
+        if release is None:
+            self.check_for_updates(announce=True)
+        elif updater.is_packaged():
+            self._install_update(release)
+        else:
+            Gtk.UriLauncher(uri=release.page_url).launch(self, None, None)
+
+    def check_for_updates(self, announce: bool) -> None:
+        """Ask GitHub for the latest release. ``announce`` reports "nothing
+        new" and errors too, which the silent check at start does not."""
+
+        self._update_busy(True)
+
+        def finish(release: updater.Release | None, error: str) -> bool:
+            if self.app.window is not self:
+                return GLib.SOURCE_REMOVE
+            self._update_busy(False)
+            if error:
+                self.update_row.set_subtitle(
+                    _("Suche fehlgeschlagen: {error}").format(error=error)
+                )
+            elif release is not None and updater.is_newer(
+                release.version, __version__
+            ):
+                self.app.update_release = release
+                self._offer_update(release)
+                self.toast_overlay.add_toast(
+                    Adw.Toast(
+                        title=_("Version {version} ist verfügbar").format(
+                            version=release.version
+                        ),
+                        timeout=6,
+                    )
+                )
+            else:
+                self.update_row.set_subtitle(_("HS80 Control ist aktuell"))
+                if announce:
+                    self.toast_overlay.add_toast(
+                        Adw.Toast(title=_("HS80 Control ist aktuell"))
+                    )
+            return GLib.SOURCE_REMOVE
+
+        def work() -> None:
+            try:
+                release = updater.fetch_latest()
+            except updater.UpdateError as exc:
+                GLib.idle_add(finish, None, str(exc))
+            else:
+                GLib.idle_add(finish, release, "")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _install_update(self, release: updater.Release) -> None:
+        self._update_busy(True)
+        self.update_row.set_subtitle(
+            _("Version {version} wird geladen …").format(version=release.version)
+        )
+        directory = tempfile.TemporaryDirectory(prefix="hs80-update-")
+
+        def failed(message: str) -> bool:
+            directory.cleanup()
+            if self.app.window is self:
+                self._update_busy(False)
+                self.update_row.set_subtitle(
+                    _("Update fehlgeschlagen: {error}").format(error=message)
+                )
+            return GLib.SOURCE_REMOVE
+
+        def installed(process: Gio.Subprocess, result: Gio.AsyncResult) -> None:
+            try:
+                process.wait_finish(result)
+                status = process.get_exit_status() if process.get_if_exited() else -1
+            except GLib.Error as exc:
+                failed(exc.message)
+                return
+            if status in (126, 127):  # pkexec: dismissed or not authorised
+                failed(_("Passwortabfrage abgebrochen"))
+                return
+            if status != 0:
+                failed(_("dnf meldet Fehler {status}").format(status=status))
+                return
+            directory.cleanup()
+            self.app.update_release = None
+            self.app.finish_update(release.version)
+
+        def install(package: Path) -> bool:
+            if self.app.window is self:
+                self.update_row.set_subtitle(
+                    _("Version {version} wird installiert – bitte Passwort bestätigen")
+                    .format(version=release.version)
+                )
+            try:
+                process = Gio.Subprocess.new(
+                    updater.install_command(package), Gio.SubprocessFlags.NONE
+                )
+            except GLib.Error as exc:
+                return failed(exc.message)
+            process.wait_async(None, installed)
+            return GLib.SOURCE_REMOVE
+
+        def work() -> None:
+            try:
+                package = updater.download(release, Path(directory.name))
+            except (updater.UpdateError, OSError) as exc:
+                GLib.idle_add(failed, str(exc))
+            else:
+                GLib.idle_add(install, package)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _language_selected(self, row: Adw.ComboRow, _property: object) -> None:
+        code = list(i18n.LANGUAGES)[row.get_selected()]
+        # Switching rebuilds this window, so leave the signal handler first.
+        GLib.idle_add(self.app.set_language, code)
+
+    def choose_language(self) -> None:
+        """First start: ask once, in both languages."""
+
+        dialog = Adw.AlertDialog(
+            heading="Sprache wählen · Choose language",
+            body=(
+                "Die Sprache lässt sich später in der Übersicht ändern.\n"
+                "You can change the language later on the overview page."
+            ),
+        )
+        for code, name in i18n.LANGUAGES.items():
+            dialog.add_response(code, name)
+        current = i18n.language()
+        dialog.set_response_appearance(current, Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response(current)
+        # Dismissing the question keeps the language already on screen.
+        dialog.set_close_response(current)
+        dialog.connect(
+            "response",
+            lambda _dialog, response: GLib.idle_add(self.app.set_language, response),
+        )
+        dialog.present(self)
+
     def _tray_toggled(self, row: Adw.SwitchRow, _property: object) -> None:
         enabled = row.get_active()
         try:
@@ -1502,7 +1727,9 @@ class HS80Window(Adw.ApplicationWindow):
         except OSError as exc:
             self.toast_overlay.add_toast(
                 Adw.Toast(
-                    title=f"Autostart konnte nicht geändert werden: {exc}",
+                    title=_("Autostart konnte nicht geändert werden: {error}").format(
+                        error=exc
+                    ),
                     timeout=5,
                 )
             )
@@ -1531,7 +1758,7 @@ class HS80Window(Adw.ApplicationWindow):
         )
 
     def _choose_sofa(self, _button: Gtk.Button) -> None:
-        dialog = Gtk.FileDialog(title="SOFA-HRTF auswählen", modal=True)
+        dialog = Gtk.FileDialog(title=_("SOFA-HRTF auswählen"), modal=True)
         file_filter = Gtk.FileFilter(name="SOFA HRTF")
         file_filter.add_pattern("*.sofa")
         filters = Gio.ListStore.new(Gtk.FileFilter)
@@ -1572,6 +1799,10 @@ class HS80Application(Adw.Application):
         self.settings = AppSettings()
         self.autostart = Autostart()
         self.window: HS80Window | None = None
+        self._language_asked = False
+        self._update_checked = False
+        self.update_release: updater.Release | None = None
+        i18n.init(self.settings.path)
         self.tray = TrayIcon(
             APP_ID, self.toggle_window, self.quit, self._tray_available_changed
         )
@@ -1613,6 +1844,9 @@ class HS80Application(Adw.Application):
                 return
             self.window = HS80Window(self)
             self.window.connect("destroy", self._window_destroyed)
+            if self.settings.update_check and not self._update_checked:
+                self._update_checked = True
+                self.window.check_for_updates(announce=False)
             if hidden:
                 # The unpresented window keeps the application alive. Give
                 # the desktop time to bring its tray up after login.
@@ -1622,13 +1856,105 @@ class HS80Application(Adw.Application):
                 return
         self.show_window()
 
-    def _window_destroyed(self, _window: Gtk.Window) -> None:
-        self.window = None
+    def _window_destroyed(self, window: Gtk.Window) -> None:
+        if window is self.window:
+            self.window = None
 
     def show_window(self) -> None:
         if self.window is not None:
             self.window.set_visible(True)
             self.window.present()
+            if self.settings.language is None and not self._language_asked:
+                self._language_asked = True
+                self.window.choose_language()
+
+    def finish_update(self, version: str) -> None:
+        """The new package is on disk: restart the daemon, offer a restart."""
+
+        try:
+            Gio.Subprocess.new(
+                ["systemctl", "--user", "restart", "hs80d.service"],
+                Gio.SubprocessFlags.NONE,
+            )
+        except GLib.Error:
+            pass
+        if self.window is None:
+            return
+        self.window._update_busy(False)
+        self.window.update_row.set_subtitle(
+            _("Version {version} ist installiert – Neustart nötig").format(
+                version=version
+            )
+        )
+        self.window.update_button.set_sensitive(False)
+        dialog = Adw.AlertDialog(
+            heading=_("Update installiert"),
+            body=_(
+                "Version {version} ist installiert. HS80 Control muss neu "
+                "gestartet werden, damit sie aktiv wird."
+            ).format(version=version),
+        )
+        dialog.add_response("later", _("Später"))
+        dialog.add_response("restart", _("Jetzt neu starten"))
+        dialog.set_response_appearance("restart", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("restart")
+        dialog.set_close_response("later")
+        dialog.connect(
+            "response",
+            lambda _dialog, response: self.restart() if response == "restart" else None,
+        )
+        self.window.set_visible(True)
+        dialog.present(self.window)
+
+    def restart(self) -> None:
+        # The new process must not find this instance still on the bus.
+        try:
+            Gio.Subprocess.new(
+                ["/bin/sh", "-c", "sleep 1; exec hs80-control"],
+                Gio.SubprocessFlags.NONE,
+            )
+        except GLib.Error:
+            pass
+        self.quit()
+
+    def set_language(self, code: str) -> bool:
+        """Store the language and rebuild the interface if it changed."""
+
+        try:
+            self.settings.set_language(code)
+        except (OSError, ValueError) as exc:
+            if self.window is not None:
+                self.window.toast_overlay.add_toast(
+                    Adw.Toast(
+                        title=_(
+                            "Sprache konnte nicht gespeichert werden: {error}"
+                        ).format(error=exc),
+                        timeout=5,
+                    )
+                )
+            return GLib.SOURCE_REMOVE
+        if code == i18n.language():
+            return GLib.SOURCE_REMOVE
+        i18n.set_language(code)
+        if self.settings.tray:
+            # The tray host caches the menu labels; re-register to renew them.
+            self.tray.stop()
+            self.tray.start()
+        old = self.window
+        if old is not None:
+            # Every label is set while the widgets are built, so a fresh
+            # window is the reliable way to switch all of them.
+            window = HS80Window(self)
+            window.connect("destroy", self._window_destroyed)
+            window.set_default_size(old.get_width(), old.get_height())
+            page = old.stack.get_visible_child_name()
+            if page:
+                window.stack.set_visible_child_name(page)
+            self.window = window
+            if old.get_visible():
+                window.present()
+            old.destroy()
+        return GLib.SOURCE_REMOVE
 
     def toggle_window(self) -> None:
         if self.window is None:

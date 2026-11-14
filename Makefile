@@ -9,20 +9,22 @@ RELEASE_DATE = $(shell sed -n 's/.*<release version="$(VERSION)" date="\([^"]*\)
 SOURCE_DATE_EPOCH ?= $(shell date --utc --date='$(RELEASE_DATE) 00:00:00' +%s 2>/dev/null)
 DIST_BASENAME = $(PACKAGE)-$(VERSION)
 DIST_ARCHIVE = dist/$(DIST_BASENAME).tar.gz
-DIST_INPUTS = .github CHANGELOG.md CONTRIBUTING.md LICENSE LICENSE.CC0 Makefile NOTICE README.md SECURITY.md bin data docs packaging src tests
+RPM_TOPDIR = $(CURDIR)/build/rpmbuild
+INSTALLER = dist/$(PACKAGE)-installer-$(VERSION).run
+DIST_INPUTS = .github CHANGELOG.md CONTRIBUTING.md LICENSE LICENSE.CC0 Makefile NOTICE README.md SECURITY.md bin data docs installer packaging src tests
 
 LIBDIR = $(DESTDIR)$(PREFIX)/lib/hs80-control
 BINDIR = $(DESTDIR)$(PREFIX)/bin
 LIBEXECDIR = $(DESTDIR)$(PREFIX)/libexec
 DATADIR = $(DESTDIR)$(PREFIX)/share
 
-.PHONY: all test check check-version check-prefix check-home dist FORCE install \
-	install-user uninstall uninstall-user clean
+.PHONY: all test check check-version check-prefix check-home dist rpm installer \
+	FORCE install install-user uninstall uninstall-user clean
 
 all: check
 
 test:
-	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests -v
+	HS80_CONTROL_LANGUAGE=de PYTHONPATH=src $(PYTHON) -m unittest discover -s tests -v
 
 check-version:
 	@test -n "$(VERSION)" || { echo "Could not read __version__ from src/hs80_control/__init__.py" >&2; exit 1; }
@@ -37,6 +39,8 @@ check: check-version test
 	desktop-file-validate data/applications/io.github.hs80control.App.desktop
 	desktop-file-validate data/autostart/io.github.hs80control.App.desktop
 	appstreamcli validate --no-net --strict data/metainfo/io.github.hs80control.App.metainfo.xml
+	sh -n installer/install.sh
+	sh -n installer/bundle-header.sh
 	xmllint --noout data/metainfo/io.github.hs80control.App.metainfo.xml data/icons/io.github.hs80control.App.svg
 	udevadm verify --no-summary data/udev/70-hs80-control.rules
 	@set -e; runtime_dir="$${XDG_RUNTIME_DIR:-}"; \
@@ -70,6 +74,30 @@ $(DIST_ARCHIVE): FORCE $(DIST_INPUTS)
 		--transform='s,^,$(DIST_BASENAME)/,' \
 		--use-compress-program='gzip -n' -cf "$@.tmp" $(DIST_INPUTS)
 	mv -f "$@.tmp" "$@"
+
+rpm: dist
+	mkdir -p "$(RPM_TOPDIR)/BUILD" "$(RPM_TOPDIR)/BUILDROOT" "$(RPM_TOPDIR)/RPMS" \
+		"$(RPM_TOPDIR)/SOURCES" "$(RPM_TOPDIR)/SPECS" "$(RPM_TOPDIR)/SRPMS" "$(RPM_TOPDIR)/tmp"
+	rpmbuild -ba packaging/hs80-control.spec \
+		--define "_topdir $(RPM_TOPDIR)" \
+		--define "_tmppath $(RPM_TOPDIR)/tmp" \
+		--define "_sourcedir $(CURDIR)/dist"
+
+# One file for end users: the graphical installer with its logos and the RPM.
+installer: rpm
+	rm -rf build/installer
+	mkdir -p build/installer
+	cp installer/hs80_installer.py installer/install.sh build/installer/
+	cp data/icons/io.github.hs80control.App.svg build/installer/hs80-control.svg
+	cp src/hs80_control/assets/stickelbroeck-labs.png build/installer/
+	cp "$(RPM_TOPDIR)"/RPMS/noarch/$(PACKAGE)-$(VERSION)-*.noarch.rpm build/installer/
+	{ cat installer/bundle-header.sh; \
+	  tar -C build/installer --sort=name --format=gnu --owner=0 --group=0 \
+		--numeric-owner --mtime="@$(SOURCE_DATE_EPOCH)" -cf - . | gzip -n; \
+	} > "$(INSTALLER).tmp"
+	chmod 0755 "$(INSTALLER).tmp"
+	mv -f "$(INSTALLER).tmp" "$(INSTALLER)"
+	@echo "Installer: $(INSTALLER)"
 
 FORCE:
 

@@ -19,6 +19,8 @@ from . import __version__
 from .config import DEFAULT_CONFIG, RGB_BATTERY_SAVERS, RGB_MODES
 from .daemon import diagnostics
 from .dbus_service import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
+from . import i18n
+from .i18n import tr as _
 from .protocol import parse_color
 
 
@@ -158,42 +160,52 @@ def _print_status(status: dict[str, object], as_json: bool) -> None:
     microphone = int(status.get("MicrophoneMuted", -1))
     wired = bool(status.get("WiredHeadsetPresent"))
     mode = str(status.get("ConnectionMode", ""))
-    offline_detail = " (am USB-Ladekabel)" if wired else ""
-    print(f"HS80: {'verbunden' if connected else f'offline{offline_detail}'}")
+    unknown = _("unbekannt")
+
+    def on_off(value: object) -> str:
+        return _("an") if value else _("aus")
+
+    def yes_no(value: object) -> str:
+        return _("ja") if value else _("nein")
+
+    offline_detail = _(" (am USB-Ladekabel)") if wired else ""
+    print(f"HS80: {_('verbunden') if connected else f'offline{offline_detail}'}")
     if mode == "usb":
-        print("Verbindung: USB-Kabel (Direktbetrieb, ohne Receiver)")
+        print(_("Verbindung: USB-Kabel (Direktbetrieb, ohne Receiver)"))
     else:
         print(
-            f"Receiver: {'verbunden' if status.get('ReceiverConnected') else 'offline'}"
+            "Receiver: "
+            f"{_('verbunden') if status.get('ReceiverConnected') else 'offline'}"
         )
     low = connected and 0 <= battery <= LOW_BATTERY_PERCENT and charging != 1
     print(
-        f"Akku: {f'{battery} %' if battery >= 0 else 'unbekannt'}"
-        f"{' (niedrig, bitte laden)' if low else ''}"
+        f"{_('Akku')}: {f'{battery} %' if battery >= 0 else unknown}"
+        f"{_(' (niedrig, bitte laden)') if low else ''}"
     )
-    print(f"Akkuwarnung: {'an' if status.get('BatteryNotify', True) else 'aus'}")
-    print(f"Laden: {('ja' if charging else 'nein') if charging >= 0 else 'unbekannt'}")
-    print(f"Mikrofonarm: {('stumm' if microphone else 'aktiv') if microphone >= 0 else 'unbekannt'}")
-    print(f"Firmware: {status.get('Firmware') or 'unbekannt'}")
+    print(f"{_('Akkuwarnung')}: {on_off(status.get('BatteryNotify', True))}")
+    print(f"{_('Laden')}: {yes_no(charging) if charging >= 0 else unknown}")
+    microphone_text = _("stumm") if microphone else _("aktiv")
+    print(f"{_('Mikrofonarm')}: {microphone_text if microphone >= 0 else unknown}")
+    print(f"Firmware: {status.get('Firmware') or unknown}")
     print(
-        f"RGB: {status.get('RgbMode', 'unbekannt')} / "
+        f"RGB: {status.get('RgbMode', unknown)} / "
         f"{status.get('RgbBrightness', 0)} %"
     )
     print(
-        f"Sidetone: {'an' if status.get('SidetoneEnabled') else 'aus'} / "
+        f"Sidetone: {on_off(status.get('SidetoneEnabled'))} / "
         f"{float(status.get('SidetoneDb', 0.0)):.1f} dB"
     )
-    print(f"Spatial 7.1: {'an' if status.get('SpatialEnabled') else 'aus'}")
+    print(f"Spatial 7.1: {on_off(status.get('SpatialEnabled'))}")
     print(
-        "Spatial als Standard: "
-        f"{'ja' if status.get('SpatialMakeDefault', True) else 'nein'}"
+        f"{_('Spatial als Standard')}: "
+        f"{yes_no(status.get('SpatialMakeDefault', True))}"
     )
     if status.get("LastError"):
-        print(f"Hinweis: {status['LastError']}")
+        print(f"{_('Hinweis')}: {status['LastError']}")
     if status.get("AudioError"):
-        print(f"Audio-Hinweis: {status['AudioError']}")
+        print(f"{_('Audio-Hinweis')}: {status['AudioError']}")
     if status.get("SpatialError"):
-        print(f"Spatial-Hinweis: {status['SpatialError']}")
+        print(f"{_('Spatial-Hinweis')}: {status['SpatialError']}")
 
 
 async def run(arguments: argparse.Namespace) -> int:
@@ -287,9 +299,9 @@ async def run(arguments: argparse.Namespace) -> int:
             # The generic "applied" wording says nothing useful here; the
             # interesting answer is whether a headset turned up.
             print(
-                "Headset verbunden."
+                _("Headset verbunden.")
                 if applied
-                else "Kein Headset gefunden; Receiver-Verbindung neu aufgebaut."
+                else _("Kein Headset gefunden; Receiver-Verbindung neu aufgebaut.")
             )
             _print_status(status, False)
         elif command == "status" or command == "refresh":
@@ -303,9 +315,9 @@ async def run(arguments: argparse.Namespace) -> int:
                 )
             )
         elif applied:
-            print("Einstellung angewendet.")
+            print(_("Einstellung angewendet."))
         else:
-            print("Einstellung gespeichert; das Headset ist derzeit offline.")
+            print(_("Einstellung gespeichert; das Headset ist derzeit offline."))
         return 0
     finally:
         bus.disconnect()
@@ -342,6 +354,7 @@ def main(argv: list[str] | None = None) -> int:
             return int(exc.code)
     else:
         arguments = build_parser().parse_args(raw_arguments)
+    i18n.init()
     try:
         return asyncio.run(run(arguments))
     except AttributeError as exc:
@@ -350,8 +363,8 @@ def main(argv: list[str] | None = None) -> int:
         if "call_" not in str(exc):
             raise
         message = (
-            "der laufende Daemon kennt diese Funktion nicht (ältere Version); "
-            "bitte neu starten: systemctl --user restart hs80d.service"
+            _("der laufende Daemon kennt diese Funktion nicht (ältere Version); "
+            "bitte neu starten: systemctl --user restart hs80d.service")
         )
         if arguments.json:
             print(json.dumps({"error": message}, sort_keys=True), file=sys.stderr)

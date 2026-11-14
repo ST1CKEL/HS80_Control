@@ -18,6 +18,8 @@ from pathlib import Path
 import shutil
 import tempfile
 
+from .i18n import LANGUAGES, tr as _
+
 
 AUTOSTART_FILENAME = "io.github.hs80control.App.desktop"
 PROFILE_NAME_LENGTH = 40
@@ -175,6 +177,8 @@ class AppSettings:
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or _config_home() / "hs80-control" / "app.json"
         self._tray = True
+        self._language: str | None = None
+        self._update_check = True
         self._profiles: dict[str, dict[str, object]] = {}
         try:
             loaded = json.loads(self.path.read_text(encoding="utf-8"))
@@ -184,6 +188,10 @@ class AppSettings:
             return
         if isinstance(loaded.get("tray"), bool):
             self._tray = loaded["tray"]
+        if isinstance(loaded.get("update_check"), bool):
+            self._update_check = loaded["update_check"]
+        if loaded.get("language") in LANGUAGES:
+            self._language = loaded["language"]
         profiles = loaded.get("rgb_profiles")
         if isinstance(profiles, dict):
             for name, profile in profiles.items():
@@ -197,11 +205,17 @@ class AppSettings:
     @staticmethod
     def _clean_name(name: object) -> str:
         if not isinstance(name, str) or not name.strip():
-            raise ValueError("Profilname darf nicht leer sein")
+            raise ValueError(_("Profilname darf nicht leer sein"))
         return name.strip()[:PROFILE_NAME_LENGTH]
 
     def _save(self) -> None:
-        data = {"tray": self._tray, "rgb_profiles": self._profiles}
+        data: dict[str, object] = {
+            "tray": self._tray,
+            "rgb_profiles": self._profiles,
+            "update_check": self._update_check,
+        }
+        if self._language is not None:
+            data["language"] = self._language
         _atomic_write(self.path, json.dumps(data, indent=2, sort_keys=True) + "\n")
 
     @property
@@ -213,6 +227,28 @@ class AppSettings:
         self._save()
 
     @property
+    def update_check(self) -> bool:
+        """Whether the window looks for a new release when it starts."""
+
+        return self._update_check
+
+    def set_update_check(self, enabled: bool) -> None:
+        self._update_check = bool(enabled)
+        self._save()
+
+    @property
+    def language(self) -> str | None:
+        """The chosen interface language; None until the user has picked."""
+
+        return self._language
+
+    def set_language(self, code: str) -> None:
+        if code not in LANGUAGES:
+            raise ValueError(f"unsupported language: {code}")
+        self._language = code
+        self._save()
+
+    @property
     def rgb_profiles(self) -> dict[str, dict[str, object]]:
         return {name: dict(profile) for name, profile in self._profiles.items()}
 
@@ -220,7 +256,9 @@ class AppSettings:
         clean_name = self._clean_name(name)
         clean = validate_rgb_profile(profile)
         if clean_name not in self._profiles and len(self._profiles) >= PROFILE_LIMIT:
-            raise ValueError(f"Höchstens {PROFILE_LIMIT} Profile möglich")
+            raise ValueError(
+                _("Höchstens {limit} Profile möglich").format(limit=PROFILE_LIMIT)
+            )
         self._profiles[clean_name] = clean
         self._save()
 

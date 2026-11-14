@@ -59,6 +59,9 @@ Die Suite umfasst einen leichtgewichtigen Hintergrunddienst (`hs80d`), eine asyn
 - 🔄 **Intelligenter Reconnect & Hotplug**: Schneller Neuaufbau der Funkverbindung auf Knopfdruck bei eingeschaltetem Headset ohne Dienstneustart.
 - 🔌 **Direkter Kabelbetrieb**: Automatische Erkennung des Headsets am USB-Kabel (`1b1c:0a69`) mit voller Audio- und Steuerfunktionalität ohne USB-Dongle.
 - ⚡ **Ladekabel-Zustandserkennung**: Präzise Diagnose von `1b1c:0a6a` (ausgeschaltetes Headset lädt nur am Kabel).
+- 🌐 **Deutsch & Englisch**: Die Sprache wird beim ersten Start abgefragt und lässt sich in der Übersicht unter „Sprache" jederzeit umstellen. Sie gilt für Fenster, Infobereich, Akkuwarnung und `hs80ctl`.
+- ⬆️ **Updates in der App**: Neue Versionen werden von der GitHub-Seite des Projekts bezogen und auf Knopfdruck installiert (Übersicht → „Updates").
+- 📦 **Grafischer Installer für Fedora**: Eine einzelne `.run`-Datei richtet Paket, Dienst, Sprache und Autostart ein – unter KDE Plasma und GNOME.
 - 🎨 **Adaptive GTK4/libadwaita GUI**: Automatische Anpassung an Dark/Light-Systemfarben und Fensterbreiten, System-Akzentfarben und Live-Benachrichtigungen.
 - 🤖 **Vollständige D-Bus API & JSON-Support**: Perfekt für Automatisierung, Desktop-Widgets, Waybar/Polybar und Skripte.
 
@@ -208,6 +211,18 @@ sudo dnf install pipewire-module-filter-chain-sofa
 ---
 
 ## Installation & Schnellstart
+
+### Grafischer Installer für Fedora (KDE Plasma & GNOME)
+
+Am einfachsten ist der Installer aus dem [neuesten Release](https://github.com/ST1CKEL/HS80_Control/releases/latest). Er enthält das RPM-Paket und fragt Sprache, Autostart und – unter GNOME – die Erweiterung für den Infobereich ab:
+
+```bash
+sh hs80-control-installer-*.run
+```
+
+Der Installer öffnet ein Fenster und fragt für die Paketinstallation einmal das Administratorpasswort über den Dialog des Desktops ab. Fehlen GTK 4, libadwaita oder PyGObject (bei einer schlanken KDE-Installation möglich), richtet er sie vorher über `dnf` ein. Aus einem Quellverzeichnis startet `sh installer/install.sh` denselben Installer; ohne beiliegendes RPM lädt er das Paket des neuesten Releases von GitHub.
+
+Spätere Versionen installiert die App selbst: **Übersicht → Updates → „Nach Updates suchen"**. Die Suche beim Programmstart lässt sich dort abschalten. Die Abfrage geht an die GitHub-API und überträgt keine Gerätedaten; das geladene Paket wird mit der von GitHub veröffentlichten SHA-256-Prüfsumme verglichen und über `dnf` installiert.
 
 ### Benutzerinstallation (Empfohlen)
 
@@ -541,19 +556,20 @@ make test
 make check
 ```
 
-### Reproduzierbares Quellarchiv & RPM-Paket erstellen
+### Quellarchiv, RPM-Paket & Installer erstellen
 
 ```bash
 # Quellarchiv mit determiniertem SOURCE_DATE_EPOCH bauen
 make dist
 
-# RPM-Paket kompilieren
-mkdir -p build/rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS,tmp}
-rpmbuild -ba packaging/hs80-control.spec \
-  --define "_topdir $PWD/build/rpmbuild" \
-  --define "_tmppath $PWD/build/rpmbuild/tmp" \
-  --define "_sourcedir $PWD/dist"
+# RPM-Paket bauen (build/rpmbuild/RPMS/noarch/)
+make rpm
+
+# Grafischen Installer als einzelne Datei bauen (dist/hs80-control-installer-<Version>.run)
+make installer
 ```
+
+Die Tests laufen mit `HS80_CONTROL_LANGUAGE=de`, damit sie nicht von der Sprache des Systems abhängen. Der Installer lässt sich ohne Root-Rechte durchspielen: `HS80_INSTALLER_DRY_RUN=1 sh installer/install.sh` gibt die privilegierten Befehle nur aus.
 
 ---
 

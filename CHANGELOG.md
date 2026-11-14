@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an HS80 Control. Das Format folgt
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionen folgen
 [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.8.0] – 2026-11-14
+
+### Neu
+- Englisch als zweite Sprache der Oberfläche. Beim ersten Start fragt die App nach der Sprache; später lässt sie sich in der Übersicht unter „Sprache" umstellen. Die Wahl gilt auch für Infobereich, Akkuwarnung und die Statusausgabe von `hs80ctl`. Ohne Wahl entscheidet die Systemsprache; `HS80_CONTROL_LANGUAGE=de|en` übersteuert alles.
+- Updates in der App: Die Übersicht zeigt unter „Updates" neue Versionen von der GitHub-Seite an und installiert das RPM auf Knopfdruck (Passwortabfrage des Desktops, Prüfsummenvergleich). Die Suche beim Programmstart ist abschaltbar.
+- Grafischer Installer für Fedora mit KDE Plasma oder GNOME (`make installer`, als `.run`-Datei im Release): fragt Sprache, Autostart und – unter GNOME – die Infobereich-Erweiterung ab und richtet Paket und Dienst ein.
+- `make rpm` baut das RPM in einem Schritt.
+
 ## [0.7.1] – 2026-11-14
 
 ### Geändert
@@ -109,6 +117,7 @@ Die Warnung ist standardmäßig aktiv, mit den Schwellen 20 % (niedrig) und 10 %
 
 - Erste Veröffentlichung.
 
+[0.8.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.8.0
 [0.7.1]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.7.1
 [0.7.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.7.0
 [0.6.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.6.0

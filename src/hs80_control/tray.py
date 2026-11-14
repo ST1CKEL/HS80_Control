@@ -18,6 +18,8 @@ import gi
 gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib  # noqa: E402
 
+from .i18n import tr as _  # noqa: E402
+
 
 LOG = logging.getLogger(__name__)
 
@@ -114,12 +116,12 @@ def icon_name(desktop: str | None = None) -> str:
 def menu_items() -> dict[int, dict[str, GLib.Variant]]:
     return {
         MENU_OPEN: {
-            "label": GLib.Variant("s", "HS80 Control öffnen"),
+            "label": GLib.Variant("s", _("HS80 Control öffnen")),
             "icon-name": GLib.Variant("s", icon_name()),
         },
         MENU_SEPARATOR: {"type": GLib.Variant("s", "separator")},
         MENU_QUIT: {
-            "label": GLib.Variant("s", "Beenden"),
+            "label": GLib.Variant("s", _("Beenden")),
             "icon-name": GLib.Variant("s", "application-exit"),
         },
     }
@@ -142,8 +144,10 @@ def tooltip_text(connected: bool, battery: int, charging: bool) -> str:
     if not connected:
         return "Headset offline"
     if battery < 0:
-        return "Headset verbunden"
-    return f"Akku {battery} %" + (" · lädt" if charging else "")
+        return _("Headset verbunden")
+    return _("Akku {percent} %").format(percent=battery) + (
+        _(" · lädt") if charging else ""
+    )
 
 
 class TrayIcon:

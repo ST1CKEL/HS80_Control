@@ -14,6 +14,8 @@ from typing import Any, Callable, Literal
 
 from dbus_next import Message, MessageType, Variant
 
+from . import i18n
+from .i18n import tr as _
 from .state import DeviceState, StateStore
 
 
@@ -102,12 +104,16 @@ class LowBatteryMonitor:
 def notification_text(level: BatteryLevel, percent: int) -> tuple[str, str]:
     if level == "critical":
         return (
-            "HS80: Akku fast leer",
-            f"Noch {percent} %. Das Headset schaltet sich bald ab – jetzt laden.",
+            _("HS80: Akku fast leer"),
+            _(
+                "Noch {percent} %. Das Headset schaltet sich bald ab – jetzt laden."
+            ).format(percent=percent),
         )
     return (
-        "HS80: Akku niedrig",
-        f"Noch {percent} %. Bitte bald an das Ladekabel anschließen.",
+        _("HS80: Akku niedrig"),
+        _("Noch {percent} %. Bitte bald an das Ladekabel anschließen.").format(
+            percent=percent
+        ),
     )
 
 
@@ -176,6 +182,8 @@ class BatteryNotifier:
             LOG.info("battery %s at %d %%", level, snapshot.battery_percent)
 
     async def _send(self, level: BatteryLevel, percent: int) -> None:
+        # The daemon outlives language changes made in the window.
+        i18n.init()
         summary, body = notification_text(level, percent)
         critical = level == "critical"
         reply = await asyncio.wait_for(
