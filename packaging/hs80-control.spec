@@ -1,5 +1,5 @@
 Name:           hs80-control
-Version:        0.5.0
+Version:        0.6.0
 Release:        1%{?dist}
 Summary:        Corsair HS80 RGB Wireless control service
 License:        GPL-3.0-or-later AND CC0-1.0
@@ -33,6 +33,9 @@ Requires:       wireplumber
 Requires(post): systemd-udev
 Requires(postun): systemd-udev
 Recommends:     easyeffects
+# GNOME Shell has no tray of its own. Only pull the extension where the
+# shell is installed, so a Plasma system does not gain GNOME through it.
+Recommends:     (gnome-shell-extension-appindicator if gnome-shell)
 Recommends:     pipewire-module-filter-chain-sofa
 
 %description
@@ -75,10 +78,16 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 %{_userunitdir}/hs80-spatial.service
 %{_datadir}/dbus-1/services/io.github.hs80control.Daemon.service
 %{_datadir}/applications/io.github.hs80control.App.desktop
+%config(noreplace) %{_sysconfdir}/xdg/autostart/io.github.hs80control.App.desktop
 %{_datadir}/metainfo/io.github.hs80control.App.metainfo.xml
 %{_datadir}/icons/hicolor/scalable/apps/io.github.hs80control.App.svg
 
 %changelog
+* Sat Nov 14 2026 ST1CKEL - 0.6.0-1
+- Add a system tray icon; closing the window keeps the app in the tray
+- Start minimised in the tray at login, with switches to turn both off
+- On GNOME recommend the AppIndicator extension and exit a hidden start
+  when no tray host is present
 * Sat Nov 14 2026 ST1CKEL - 0.5.0-1
 - Add a switch for the low-battery warning to the app, hs80ctl and D-Bus
 * Sat Nov 14 2026 ST1CKEL - 0.4.0-1

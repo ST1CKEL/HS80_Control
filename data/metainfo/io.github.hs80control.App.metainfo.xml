@@ -36,6 +36,11 @@
     <modalias>usb:v1B1Cp0A69d*</modalias>
   </provides>
   <releases>
+    <release version="0.6.0" date="2026-11-14">
+      <description>
+        <p>Adds a system tray icon that shows the battery level. The app now starts minimised in the tray at login and stays there when its window is closed; both can be switched off on the overview page.</p>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-11-14">
       <description>
         <p>Adds a switch for the low-battery warning to the overview page. The warning stays on by default and can also be switched with hs80ctl battery-warning.</p>

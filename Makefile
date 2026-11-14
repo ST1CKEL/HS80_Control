@@ -35,6 +35,7 @@ check: check-version test
 	PYTHONPATH=src $(PYTHON) -m compileall -q src tests
 	sh -n bin/hs80-control bin/hs80ctl bin/hs80d
 	desktop-file-validate data/applications/io.github.hs80control.App.desktop
+	desktop-file-validate data/autostart/io.github.hs80control.App.desktop
 	appstreamcli validate --no-net --strict data/metainfo/io.github.hs80control.App.metainfo.xml
 	xmllint --noout data/metainfo/io.github.hs80control.App.metainfo.xml data/icons/io.github.hs80control.App.svg
 	udevadm verify --no-summary data/udev/70-hs80-control.rules
@@ -82,6 +83,7 @@ install: check-prefix
 	$(INSTALL) -D -m 0644 data/systemd/hs80-spatial.service "$(DESTDIR)$(PREFIX)/lib/systemd/user/hs80-spatial.service"
 	$(INSTALL) -D -m 0644 data/dbus/io.github.hs80control.Daemon.service "$(DATADIR)/dbus-1/services/io.github.hs80control.Daemon.service"
 	$(INSTALL) -D -m 0644 data/applications/io.github.hs80control.App.desktop "$(DATADIR)/applications/io.github.hs80control.App.desktop"
+	$(INSTALL) -D -m 0644 data/autostart/io.github.hs80control.App.desktop "$(DESTDIR)/etc/xdg/autostart/io.github.hs80control.App.desktop"
 	$(INSTALL) -D -m 0644 data/metainfo/io.github.hs80control.App.metainfo.xml "$(DATADIR)/metainfo/io.github.hs80control.App.metainfo.xml"
 	$(INSTALL) -D -m 0644 data/icons/io.github.hs80control.App.svg "$(DATADIR)/icons/hicolor/scalable/apps/io.github.hs80control.App.svg"
 
@@ -94,6 +96,9 @@ install-user: check-home
 	$(INSTALL) -D -m 0644 data/systemd/hs80-spatial.service "$(HOME)/.config/systemd/user/hs80-spatial.service"
 	$(INSTALL) -D -m 0644 data/dbus/io.github.hs80control.Daemon-user-local.service "$(HOME)/.local/share/dbus-1/services/io.github.hs80control.Daemon.service"
 	$(INSTALL) -D -m 0644 data/applications/io.github.hs80control.App.desktop "$(HOME)/.local/share/applications/io.github.hs80control.App.desktop"
+	@# Keep an existing entry: it may carry the user's choice to switch autostart off.
+	test -e "$(HOME)/.config/autostart/io.github.hs80control.App.desktop" || \
+		$(INSTALL) -D -m 0644 data/autostart/io.github.hs80control.App.desktop "$(HOME)/.config/autostart/io.github.hs80control.App.desktop"
 	$(INSTALL) -D -m 0644 data/metainfo/io.github.hs80control.App.metainfo.xml "$(HOME)/.local/share/metainfo/io.github.hs80control.App.metainfo.xml"
 	$(INSTALL) -D -m 0644 data/icons/io.github.hs80control.App.svg "$(HOME)/.local/share/icons/hicolor/scalable/apps/io.github.hs80control.App.svg"
 	systemctl --user daemon-reload
@@ -106,6 +111,7 @@ uninstall: check-prefix
 	rm -f "$(DESTDIR)$(PREFIX)/lib/systemd/user/hs80d.service" "$(DESTDIR)$(PREFIX)/lib/systemd/user/hs80-spatial.service"
 	rm -f "$(DATADIR)/dbus-1/services/io.github.hs80control.Daemon.service"
 	rm -f "$(DATADIR)/applications/io.github.hs80control.App.desktop"
+	rm -f "$(DESTDIR)/etc/xdg/autostart/io.github.hs80control.App.desktop"
 	rm -f "$(DATADIR)/metainfo/io.github.hs80control.App.metainfo.xml"
 	rm -f "$(DATADIR)/icons/hicolor/scalable/apps/io.github.hs80control.App.svg"
 
@@ -118,6 +124,7 @@ uninstall-user: check-home
 	rm -f "$(HOME)/.config/systemd/user/hs80d.service" "$(HOME)/.config/systemd/user/hs80-spatial.service"
 	rm -f "$(HOME)/.local/share/dbus-1/services/io.github.hs80control.Daemon.service"
 	rm -f "$(HOME)/.local/share/applications/io.github.hs80control.App.desktop"
+	rm -f "$(HOME)/.config/autostart/io.github.hs80control.App.desktop"
 	rm -f "$(HOME)/.local/share/metainfo/io.github.hs80control.App.metainfo.xml"
 	rm -f "$(HOME)/.local/share/icons/hicolor/scalable/apps/io.github.hs80control.App.svg"
 	@if command -v systemctl >/dev/null 2>&1; then systemctl --user daemon-reload >/dev/null 2>&1 || :; fi

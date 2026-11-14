@@ -46,6 +46,7 @@ Die Suite umfasst einen leichtgewichtigen Hintergrunddienst (`hs80d`), eine asyn
 
 - 🔋 **Echtzeit-Akkumonitoring**: Exakte prozentuale Ladestandsabfrage und dynamische Ladeanzeige über Hardware-Events und Heartbeats.
 - 🪫 **Warnung bei niedrigem Akkustand**: Desktop-Benachrichtigung des Daemons ab 20 % und dringlich ab 10 % – auch wenn das Fenster geschlossen ist. Standardmäßig aktiv, per Schalter in der Übersicht oder `hs80ctl battery-warning on|off` abschaltbar; Schwellen in `config.json` unter `battery`.
+- 🖥️ **Infobereich & Autostart**: Startet beim Anmelden minimiert im Infobereich der Taskleiste, zeigt dort den Akkustand und bleibt beim Schließen des Fensters erreichbar. Beides in der Übersicht unter „Programmstart" abschaltbar.
 - 💡 **Umfassende RGB-Steuerung**: 4 Modi (*Aus*, *Statisch*, *Pulsieren*, *Regenbogen*) mit feinstufiger Helligkeitsregelung und getrennt ansteuerbaren Farbzonen (*Logo*, *Statusanzeige*, *Mikrofon-LED*).
 - ⏱️ **Einstellbarer Sleep-Timer**: Automatische Abschaltung bei Inaktivität nach 0 bis 90 Minuten.
 - 🎙️ **Hardware-Sidetone (Zero-Latency Mic Monitoring)**: Direktes, latenzfreies Mithören des eigenen Mikrofons über ALSA im Bereich von `-42 dB` bis `+4 dB`.
@@ -360,6 +361,14 @@ graph LR
 ### Besondere Merkmale der UI
 
 - **Adaptive Breakpoints**: Ab einer Fensterbreite unter `600sp` wandert der Ansichten-Umschalter von der Kopfleiste automatisch in eine kompakte Fußleiste.
+- **Infobereich**: Das Symbol nutzt das StatusNotifierItem-Protokoll. KDE Plasma unterstützt es von Haus aus. Ohne Tray-Host verhält sich das Fenster wie gewohnt und beendet das Programm beim Schließen; alle übrigen Funktionen einschließlich der Akkuwarnung laufen über den Daemon und brauchen kein Symbol.
+- **GNOME**: GNOME Shell hat keinen eigenen Infobereich. Das RPM empfiehlt dafür `gnome-shell-extension-appindicator`; einmalig aktivieren und neu anmelden:
+  ```bash
+  sudo dnf install gnome-shell-extension-appindicator
+  gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com
+  ```
+  Dort öffnet ein Klick auf das Symbol das Menü mit „HS80 Control öffnen" und „Beenden".
+- **Autostart**: Pakete installieren `/etc/xdg/autostart/io.github.hs80control.App.desktop`. Der Schalter legt zum Abschalten eine gleichnamige Datei mit `Hidden=true` in `~/.config/autostart/` an – ohne Root-Rechte.
 - **Dynamischer Akkuring**: Visualisiert den Ladezustand farblich angepasst (ab 20 % und darunter Warnfarbe, beim Laden Erfolgsfarbe, ansonsten System-Akzentfarbe).
 - **Mute-Suppression Banner**: Erkennt, wenn das Mikrofon hochgeklappt ist, und weist darauf hin, dass die Firmware in diesem Zustand Beleuchtungsänderungen erst nach dem Herunterklappen anzeigt.
 - **Live D-Bus Synchronisation**: Ändern sich Einstellungen über CLI, Skripte oder Hardware-Tasten, aktualisiert sich die Oberfläche verzögerungsfrei in Echtzeit.

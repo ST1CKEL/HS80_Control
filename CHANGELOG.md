@@ -4,6 +4,16 @@ Alle nennenswerten Änderungen an HS80 Control. Das Format folgt
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionen folgen
 [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.6.0] – 2026-11-14
+
+### Neu
+- Symbol im Infobereich der Taskleiste (StatusNotifierItem) mit Akkustand im Tooltip; Klick blendet das Fenster ein oder aus, das Kontextmenü bietet „Öffnen" und „Beenden".
+- Schließen des Fensters minimiert in den Infobereich, statt das Programm zu beenden.
+- Autostart beim Anmelden, minimiert im Infobereich (`hs80-control --background`).
+- Schalter für beides im Abschnitt „Programmstart" der Übersicht. Beides ist standardmäßig aktiv.
+- GNOME: Das RPM empfiehlt die AppIndicator-Erweiterung, das Symbol nutzt dort ein symbolisches Icon, und die Übersicht weist darauf hin, wenn kein Infobereich vorhanden ist. Ohne Infobereich beendet sich ein versteckter Autostart nach 20 Sekunden wieder, statt unsichtbar weiterzulaufen.
+- „Beenden" im Hauptmenü (Strg+Q).
+
 ## [0.5.0] – 2026-11-14
 
 ### Neu
@@ -79,5 +89,6 @@ Die Warnung ist standardmäßig aktiv, mit den Schwellen 20 % (niedrig) und 10 %
 
 - Erste Veröffentlichung.
 
+[0.6.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.6.0
 [0.5.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.5.0
 [0.4.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.4.0

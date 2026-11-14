@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=HS80 Control
+Name[de]=HS80-Steuerung
+Comment=Keep HS80 Control available in the system tray
+Comment[de]=HS80-Steuerung im Infobereich bereithalten
+Exec=hs80-control --background
+Icon=io.github.hs80control.App
+Terminal=false
+StartupNotify=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

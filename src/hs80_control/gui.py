@@ -13,13 +13,16 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
 from . import __version__
+from .autostart import BACKGROUND_FLAG, AppSettings, Autostart
 from .config import ConfigStore
+from .tray import TrayIcon, is_gnome, tooltip_text
 from .dbus_service import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
 
 
 APP_ID = "io.github.hs80control.App"
 DBUS_CALL_TIMEOUT_MS = 30_000
 SPATIAL_DBUS_CALL_TIMEOUT_MS = 60_000
+TRAY_WAIT_SECONDS = 20
 
 _CSS = b"""
 .connection-pill {
@@ -86,6 +89,18 @@ def _battery_warning_subtitle(low_percent: int, critical_percent: int) -> str:
         f"Desktop-Benachrichtigung ab {low_percent} %, "
         f"dringlich ab {critical_percent} %"
     )
+
+
+def _tray_subtitle(enabled: bool, available: bool, gnome: bool) -> str:
+    if not enabled or available:
+        return "Schließen minimiert das Fenster, statt das Programm zu beenden"
+    if gnome:
+        return (
+            "Kein Infobereich gefunden – unter GNOME die Erweiterung "
+            "„AppIndicator and KStatusNotifierItem Support“ installieren "
+            "und aktivieren"
+        )
+    return "Kein Infobereich gefunden – Schließen beendet das Programm"
 
 
 def _microphone_presentation(muted: int) -> tuple[str, str]:
@@ -184,6 +199,8 @@ class HS80Window(Adw.ApplicationWindow):
         super().__init__(application=application, title="HS80 Control")
         self.set_default_size(960, 700)
         self.set_size_request(420, 540)
+        self.app = application
+        self.connect("close-request", self._close_requested)
         self.config = ConfigStore()
         battery_settings = self.config.snapshot()["battery"]
         self._battery_settings = battery_settings
@@ -230,6 +247,8 @@ class HS80Window(Adw.ApplicationWindow):
         self.add_action(about_action)
         menu = Gio.Menu()
         menu.append("Über HS80 Control", "win.about")
+        # Closing the window only hides it while a tray is present.
+        menu.append("Beenden", "app.quit")
         menu_button = Gtk.MenuButton(
             icon_name="open-menu-symbolic", menu_model=menu, primary=True
         )
@@ -453,6 +472,28 @@ class HS80Window(Adw.ApplicationWindow):
         )
         notifications.append(self.battery_notify_switch)
         content.append(notifications)
+
+        content.append(self._section_title("Programmstart"))
+        startup = Gtk.ListBox()
+        startup.add_css_class("boxed-list")
+        startup.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.tray_switch = Adw.SwitchRow(
+            title="Im Infobereich der Taskleiste weiterlaufen"
+        )
+        self.tray_switch.set_active(self.app.settings.tray)
+        self.tray_availability_changed()
+        self.tray_switch.connect("notify::active", self._tray_toggled)
+        startup.append(self.tray_switch)
+        self.autostart_switch = Adw.SwitchRow(
+            title="Beim Anmelden automatisch starten",
+            subtitle="Startet minimiert im Infobereich",
+        )
+        self.autostart_switch.set_active(self.app.autostart.is_enabled())
+        # Without a tray icon a hidden start would leave nothing to click.
+        self.autostart_switch.set_sensitive(self.app.settings.tray)
+        self.autostart_switch.connect("notify::active", self._autostart_toggled)
+        startup.append(self.autostart_switch)
+        content.append(startup)
 
         content.append(self._section_title("Schnellaktionen"))
         self.quick_action = Gtk.ListBox()
@@ -821,6 +862,8 @@ class HS80Window(Adw.ApplicationWindow):
         self.spatial_error_banner.set_title(f"Spatial: {spatial_error}")
         self.spatial_error_banner.set_revealed(bool(spatial_error))
 
+        self.app.update_tray(headset, battery, charging == 1)
+
         self._syncing = True
         self.battery_notify_switch.set_active(
             bool(self._property("BatteryNotify", True))
@@ -1121,6 +1164,39 @@ class HS80Window(Adw.ApplicationWindow):
             timeout_ms=SPATIAL_DBUS_CALL_TIMEOUT_MS,
         )
 
+    def tray_availability_changed(self) -> None:
+        self.tray_switch.set_subtitle(
+            _tray_subtitle(
+                self.app.settings.tray, self.app.tray.available, is_gnome()
+            )
+        )
+
+    def _close_requested(self, _window: Gtk.Window) -> bool:
+        if self.app.tray_available():
+            self.set_visible(False)
+            return True
+        return False
+
+    def _tray_toggled(self, row: Adw.SwitchRow, _property: object) -> None:
+        enabled = row.get_active()
+        try:
+            self.app.set_tray_enabled(enabled)
+        except OSError as exc:
+            self.toast_overlay.add_toast(Adw.Toast(title=str(exc), timeout=5))
+        self.autostart_switch.set_sensitive(enabled)
+        self.tray_availability_changed()
+
+    def _autostart_toggled(self, row: Adw.SwitchRow, _property: object) -> None:
+        try:
+            self.app.autostart.set_enabled(row.get_active())
+        except OSError as exc:
+            self.toast_overlay.add_toast(
+                Adw.Toast(
+                    title=f"Autostart konnte nicht geändert werden: {exc}",
+                    timeout=5,
+                )
+            )
+
     def _battery_notify_toggled(
         self, row: Adw.SwitchRow, _property: object
     ) -> None:
@@ -1180,14 +1256,90 @@ class HS80Window(Adw.ApplicationWindow):
 
 
 class HS80Application(Adw.Application):
-    def __init__(self) -> None:
+    def __init__(self, start_hidden: bool = False) -> None:
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
+        self.start_hidden = start_hidden
+        self.settings = AppSettings()
+        self.autostart = Autostart()
+        self.window: HS80Window | None = None
+        self.tray = TrayIcon(
+            APP_ID, self.toggle_window, self.quit, self._tray_available_changed
+        )
+
+    def _tray_available_changed(self, _available: bool) -> None:
+        if self.window is not None:
+            self.window.tray_availability_changed()
+
+    def _quit_if_unreachable(self) -> bool:
+        # Started hidden, but no tray host took the icon (stock GNOME, or a
+        # bare window manager). Nothing on screen leads to the window then,
+        # and the daemon does the actual work, so do not linger invisibly.
+        if not self.tray.available and (
+            self.window is None or not self.window.get_visible()
+        ):
+            self.quit()
+        return GLib.SOURCE_REMOVE
+
+    def do_startup(self) -> None:
+        Adw.Application.do_startup(self)
+        quit_action = Gio.SimpleAction.new("quit", None)
+        quit_action.connect("activate", lambda *_: self.quit())
+        self.add_action(quit_action)
+        self.set_accels_for_action("app.quit", ["<Control>q"])
+        if self.settings.tray:
+            self.tray.start()
+
+    def do_shutdown(self) -> None:
+        self.tray.stop()
+        Adw.Application.do_shutdown(self)
 
     def do_activate(self) -> None:
-        window = self.get_active_window()
-        if window is None:
-            window = HS80Window(self)
-        window.present()
+        hidden, self.start_hidden = self.start_hidden, False
+        if self.window is None:
+            if hidden and not self.settings.tray:
+                # Started at login with the tray switched off: there would
+                # be nothing on screen to reach the window with.
+                self.quit()
+                return
+            self.window = HS80Window(self)
+            self.window.connect("destroy", self._window_destroyed)
+            if hidden:
+                # The unpresented window keeps the application alive. Give
+                # the desktop time to bring its tray up after login.
+                GLib.timeout_add_seconds(
+                    TRAY_WAIT_SECONDS, self._quit_if_unreachable
+                )
+                return
+        self.show_window()
+
+    def _window_destroyed(self, _window: Gtk.Window) -> None:
+        self.window = None
+
+    def show_window(self) -> None:
+        if self.window is not None:
+            self.window.set_visible(True)
+            self.window.present()
+
+    def toggle_window(self) -> None:
+        if self.window is None:
+            self.activate()
+        elif self.window.get_visible():
+            self.window.set_visible(False)
+        else:
+            self.show_window()
+
+    def tray_available(self) -> bool:
+        return self.settings.tray and self.tray.available
+
+    def set_tray_enabled(self, enabled: bool) -> None:
+        self.settings.set_tray(enabled)
+        if enabled:
+            self.tray.start()
+        else:
+            self.tray.stop()
+
+    def update_tray(self, connected: bool, battery: int, charging: bool) -> None:
+        self.tray.set_tooltip(tooltip_text(connected, battery, charging))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1195,7 +1347,9 @@ def main(argv: list[str] | None = None) -> int:
     if "--version" in arguments:
         print(f"hs80-control {__version__}")
         return 0
-    return HS80Application().run(arguments)
+    start_hidden = BACKGROUND_FLAG in arguments
+    arguments = [value for value in arguments if value != BACKGROUND_FLAG]
+    return HS80Application(start_hidden=start_hidden).run(arguments)
 
 
 if __name__ == "__main__":

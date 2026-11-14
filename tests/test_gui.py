@@ -84,6 +84,15 @@ class GuiPresentationTests(unittest.TestCase):
             self.gui._battery_presentation(97, 1, connected=False),
         )
 
+    def test_missing_tray_is_explained_per_desktop(self) -> None:
+        normal = "Schließen minimiert das Fenster, statt das Programm zu beenden"
+        self.assertEqual(normal, self.gui._tray_subtitle(True, True, False))
+        self.assertEqual(normal, self.gui._tray_subtitle(False, False, True))
+        self.assertIn("AppIndicator", self.gui._tray_subtitle(True, False, True))
+        self.assertIn(
+            "Schließen beendet", self.gui._tray_subtitle(True, False, False)
+        )
+
     def test_battery_warning_switch_names_the_thresholds(self) -> None:
         self.assertEqual(
             "Desktop-Benachrichtigung ab 20 %, dringlich ab 10 %",
