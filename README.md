@@ -426,6 +426,26 @@ flowchart LR
    ```
 3. **Im Spiel einstellen**: Stellen Sie im Audiomenü Ihres Spiels (z. B. Cyberpunk 2077, CS2, Battlefield) die Tonausgabe auf **7.1 Lautsprecher / Surround**. PipeWire übernimmt die präzise 3D-Ortung.
 
+### Welche SOFA-Datei soll ich nehmen?
+
+Eine SOFA-Datei enthält eine HRTF-Messung: Sie beschreibt, wie Kopf und Ohrmuscheln den Schall aus jeder Richtung verändern. Damit legt HS80 Control die acht virtuellen Lautsprecher so auf die beiden Kopfhörertreiber, dass die Richtungen hörbar werden.
+
+**Empfehlung zum Einstieg:** der KEMAR-Kunstkopf aus der [SADIE-II-Datenbank](https://www.york.ac.uk/sadie-project/database.html) der University of York.
+
+| | |
+| :--- | :--- |
+| **Datei** | `D1_48K_24bit_256tap_FIR_SOFA.sofa` (Subjekt D1) |
+| **Warum diese** | Ein Kunstkopf ist ein Durchschnittskopf und passt deshalb für die meisten Hörer brauchbar. |
+| **Abtastrate** | Die 48-kHz-Variante wählen – die Filterkette läuft mit 48 kHz. |
+
+Die Wahrnehmung ist von Person zu Person verschieden. Lassen sich vorne und hinten schwer unterscheiden oder bleibt der Klang „im Kopf", lohnt es sich, ein oder zwei andere Subjekte derselben Datenbank auszuprobieren (z. B. D2 oder eine der H-Messungen an echten Personen) und die Datei zu behalten, bei der die Ortung am natürlichsten klingt. Weitere Quellen und Details stehen in [docs/SPATIAL_AUDIO.md](docs/SPATIAL_AUDIO.md).
+
+Für die Faltung muss das SOFA-Modul von PipeWire installiert sein:
+
+```bash
+sudo dnf install pipewire-module-filter-chain-sofa
+```
+
 ---
 
 ## Mikrofonsteuerung & DSP
