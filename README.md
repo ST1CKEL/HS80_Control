@@ -47,7 +47,9 @@ Die Suite umfasst einen leichtgewichtigen Hintergrunddienst (`hs80d`), eine asyn
 - 🔋 **Echtzeit-Akkumonitoring**: Exakte prozentuale Ladestandsabfrage und dynamische Ladeanzeige über Hardware-Events und Heartbeats.
 - 🪫 **Warnung bei niedrigem Akkustand**: Desktop-Benachrichtigung des Daemons ab 20 % und dringlich ab 10 % – auch wenn das Fenster geschlossen ist. Standardmäßig aktiv, per Schalter in der Übersicht oder `hs80ctl battery-warning on|off` abschaltbar; Schwellen in `config.json` unter `battery`.
 - 🖥️ **Infobereich & Autostart**: Startet beim Anmelden minimiert im Infobereich der Taskleiste, zeigt dort den Akkustand und bleibt beim Schließen des Fensters erreichbar. Beides in der Übersicht unter „Programmstart" abschaltbar.
-- 💡 **Umfassende RGB-Steuerung**: 4 Modi (*Aus*, *Statisch*, *Pulsieren*, *Regenbogen*) mit feinstufiger Helligkeitsregelung und getrennt ansteuerbaren Farbzonen (*Logo*, *Statusanzeige*, *Mikrofon-LED*).
+- 💡 **Umfassende RGB-Steuerung**: 5 Modi (*Aus*, *Statisch*, *Pulsieren*, *Regenbogen*, *Farbwechsel*) mit einstellbarem Tempo, feinstufiger Helligkeit und getrennt ansteuerbaren Farbzonen (*Logo*, *Statusanzeige*, *Mikrofon-LED*). Änderungen wirken sofort als Vorschau; Kombinationen lassen sich als Profile speichern.
+- 🔇 **Stummanzeige**: Die Mikrofon-LED wechselt bei Stummschaltung auf eine frei wählbare Farbe (abschaltbar).
+- 🌙 **Akkuschonende Beleuchtung**: Effekte laufen mit 10 statt 25 Bildern pro Sekunde, unveränderte Bilder werden nicht erneut gesendet, und bei niedrigem Akkustand kann die Beleuchtung automatisch dimmen oder ausgehen.
 - ⏱️ **Einstellbarer Sleep-Timer**: Automatische Abschaltung bei Inaktivität nach 0 bis 90 Minuten.
 - 🎙️ **Hardware-Sidetone (Zero-Latency Mic Monitoring)**: Direktes, latenzfreies Mithören des eigenen Mikrofons über ALSA im Bereich von `-42 dB` bis `+4 dB`.
 - 🎚️ **Hardware-Mikrofonverstärkung & Mute**: Gain-Regelung von `-36 dB` bis `0 dB` sowie ALSA-Aufnahmestummschaltung.
@@ -67,17 +69,17 @@ Die Benutzeroberfläche folgt automatisch dem Hell-/Dunkel-Farbschema sowie den 
 | Übersicht & Gerätestatus | RGB-Beleuchtung & Zonen |
 | :---: | :---: |
 | ![Übersicht mit Statuskarten und Akkuring](docs/screenshots/overview.png) | ![RGB-Seite mit Farben und Modi](docs/screenshots/lighting.png) |
-| *Verbindungsplakette, Akkuring, Firmware & Statuskarten* | *Farbwähler für Logo, Status & Mic sowie Sleep-Timer* |
+| *Verbindungsplakette, Akkuring, Firmware & Statuskarten* | *Profile, Modus, Helligkeit, Tempo und Zonenfarben mit Sofortvorschau* |
 
 | Mikrofon, Sidetone & Gain | Binaurales 7.1 Spatial Audio |
 | :---: | :---: |
 | ![Mikrofonseite mit Sidetone und Gain](docs/screenshots/microphone.png) | ![Spatial-Seite mit binauralem 7.1](docs/screenshots/spatial.png) |
 | *Latenzfreier Sidetone, Hardware-Gain & EasyEffects-Sprung* | *SOFA-HRTF Raumklang-Faltung & Standardausgabe-Wahl* |
 
-| Akkuwarnung, Infobereich & Autostart |
-| :---: |
-| <img src="docs/screenshots/settings.png" alt="Übersicht mit Schaltern für Akkuwarnung, Infobereich und Autostart" width="50%"> |
-| *Schalter für die Akkuwarnung, das Weiterlaufen im Infobereich und den Start beim Anmelden* |
+| Akkuwarnung, Infobereich & Autostart | Stummanzeige & Energie |
+| :---: | :---: |
+| ![Übersicht mit Schaltern für Akkuwarnung, Infobereich und Autostart](docs/screenshots/settings.png) | ![RGB-Seite mit Stummanzeige und Akkusparverhalten](docs/screenshots/lighting-options.png) |
+| *Schalter für die Akkuwarnung, das Weiterlaufen im Infobereich und den Start beim Anmelden* | *Farbe der Stummanzeige, Beleuchtung bei niedrigem Akkustand & Sleep-Timer* |
 
 ---
 
@@ -286,7 +288,7 @@ Aufruf: hs80ctl [--json] <Befehl> [Optionen]
 | `reconnect` | — | Trennt die bestehende HID-Sitzung und baut die Funkverbindung sofort neu auf. |
 | `refresh` | — | Erzwingt eine Aktualisierung von Akku-, Mikrofon- und ALSA-Mixer-Werten. |
 | `doctor` | — | Überprüft lokale Systemvoraussetzungen (USB, hidraw, ALSA, PipeWire, SOFA). |
-| `rgb` | `<modus> [Optionen]` | Setzt RGB-Modus (`off`, `static`, `pulse`, `rainbow`), Helligkeit und Zonenfarben. |
+| `rgb` | `<modus> [Optionen]` | Setzt RGB-Modus (`off`, `static`, `pulse`, `rainbow`, `cycle`), Helligkeit, Tempo, Zonenfarben, Stummanzeige und Akkusparverhalten. |
 | `battery-warning` | `<on\|off>` | Schaltet die Desktop-Benachrichtigung bei niedrigem Akkustand. |
 | `sleep` | `<0..90>` | Konfiguriert den automatischen Abschalttimer in Minuten (`0` = deaktiviert). |
 | `sidetone` | `<on\|off> [--db -42..4]` | Schaltet Hardware-Monitoring ein/aus und setzt den Pegel in dB. |
@@ -457,6 +459,7 @@ ConfigureSpatial(sofa_file: str) -> bool
 SetSpatialEnabled(enabled: bool) -> bool
 SetSpatialMakeDefault(enabled: bool) -> bool
 SetBatteryNotify(enabled: bool) -> bool
+UpdateRgbOptions(speed: int16, mute_indicator: int16, mute_color: str, battery_saver: str) -> bool  # -1 bzw. "" = unverändert
 ```
 
 ### Beispiel: Steuerung per Python

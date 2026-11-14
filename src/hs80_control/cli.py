@@ -16,7 +16,7 @@ from dbus_next.aio import MessageBus
 from dbus_next.errors import DBusError
 
 from . import __version__
-from .config import DEFAULT_CONFIG, RGB_MODES
+from .config import DEFAULT_CONFIG, RGB_BATTERY_SAVERS, RGB_MODES
 from .daemon import diagnostics
 from .dbus_service import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
 from .protocol import parse_color
@@ -47,6 +47,19 @@ def build_parser() -> argparse.ArgumentParser:
     rgb.add_argument("--logo", metavar="#RRGGBB")
     rgb.add_argument("--indicator", metavar="#RRGGBB")
     rgb.add_argument("--microphone", metavar="#RRGGBB")
+    rgb.add_argument(
+        "--speed", type=int, choices=range(1, 6), metavar="1..5",
+        help="tempo of pulse, rainbow and cycle",
+    )
+    rgb.add_argument(
+        "--mute-indicator", choices=("on", "off"),
+        help="colour the microphone LED while the microphone is muted",
+    )
+    rgb.add_argument("--mute-color", metavar="#RRGGBB")
+    rgb.add_argument(
+        "--battery-saver", choices=sorted(RGB_BATTERY_SAVERS),
+        help="lighting at low battery: unchanged, dimmed or off",
+    )
 
     battery_warning = subparsers.add_parser(
         "battery-warning", help="switch the low-battery desktop notification"
@@ -110,14 +123,14 @@ async def _status(properties: Any) -> dict[str, object]:
 
 def _validate_arguments(arguments: argparse.Namespace) -> None:
     if arguments.command == "rgb":
-        for option in ("logo", "indicator", "microphone"):
+        for option in ("logo", "indicator", "microphone", "mute_color"):
             value = getattr(arguments, option)
             if value is None:
                 continue
             try:
                 parse_color(value)
             except ValueError as exc:
-                raise ValueError(f"--{option}: {exc}") from exc
+                raise ValueError(f"--{option.replace('_', '-')}: {exc}") from exc
     elif arguments.command == "sidetone":
         if arguments.db is not None and not -42.0 <= arguments.db <= 4.0:
             raise ValueError("sidetone level must be between -42 and +4 dB")
@@ -207,6 +220,22 @@ async def run(arguments: argparse.Namespace) -> int:
                     arguments.microphone or "",
                 )
             )
+            if (
+                arguments.speed is not None
+                or arguments.mute_indicator is not None
+                or arguments.mute_color is not None
+                or arguments.battery_saver is not None
+            ):
+                applied = await _dbus_call(
+                    interface.call_update_rgb_options(
+                        -1 if arguments.speed is None else arguments.speed,
+                        -1
+                        if arguments.mute_indicator is None
+                        else int(arguments.mute_indicator == "on"),
+                        arguments.mute_color or "",
+                        arguments.battery_saver or "",
+                    )
+                )
         elif command == "battery-warning":
             applied = await _dbus_call(
                 interface.call_set_battery_notify(arguments.state == "on")
@@ -315,6 +344,20 @@ def main(argv: list[str] | None = None) -> int:
         arguments = build_parser().parse_args(raw_arguments)
     try:
         return asyncio.run(run(arguments))
+    except AttributeError as exc:
+        # dbus-next builds the proxy from the daemon's introspection, so a
+        # method the running daemon lacks surfaces as a missing attribute.
+        if "call_" not in str(exc):
+            raise
+        message = (
+            "der laufende Daemon kennt diese Funktion nicht (ältere Version); "
+            "bitte neu starten: systemctl --user restart hs80d.service"
+        )
+        if arguments.json:
+            print(json.dumps({"error": message}, sort_keys=True), file=sys.stderr)
+        else:
+            print(f"hs80ctl: {message}", file=sys.stderr)
+        return 1
     except (DBusError, OSError, ValueError) as exc:
         if arguments.json:
             print(json.dumps({"error": str(exc)}, sort_keys=True), file=sys.stderr)

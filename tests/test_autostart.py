@@ -90,6 +90,53 @@ class AppSettingsTests(unittest.TestCase):
                 path.write_text(content)
                 self.assertTrue(AppSettings(path).tray)
 
+    def test_rgb_profiles_round_trip_and_survive_tray_changes(self) -> None:
+        profile = {
+            "mode": "cycle",
+            "brightness": 60,
+            "logo": "#FF0000",
+            "indicator": "#00ff00",
+            "microphone": "#0000ff",
+            "speed": 4,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "app.json"
+            settings = AppSettings(path)
+            settings.save_rgb_profile("  Abend ", profile)
+            settings.set_tray(False)
+
+            loaded = AppSettings(path)
+            self.assertFalse(loaded.tray)
+            self.assertEqual({**profile, "logo": "#ff0000"}, loaded.rgb_profiles["Abend"])
+
+            loaded.delete_rgb_profile("Abend")
+            self.assertEqual({}, AppSettings(path).rgb_profiles)
+
+    def test_invalid_profiles_are_rejected_and_damaged_ones_skipped(self) -> None:
+        good = {
+            "mode": "static", "brightness": 100, "speed": 3,
+            "logo": "#112233", "indicator": "#112233", "microphone": "#112233",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "app.json"
+            settings = AppSettings(path)
+            for bad in (
+                {**good, "mode": "fire"},
+                {**good, "brightness": 101},
+                {**good, "speed": 0},
+                {**good, "logo": "red"},
+            ):
+                with self.assertRaises(ValueError):
+                    settings.save_rgb_profile("x", bad)
+            with self.assertRaises(ValueError):
+                settings.save_rgb_profile("   ", good)
+
+            path.write_text(
+                '{"rgb_profiles": {"ok": %s, "kaputt": {"mode": "fire"}}}'
+                % __import__("json").dumps(good)
+            )
+            self.assertEqual(["ok"], list(AppSettings(path).rgb_profiles))
+
 
 if __name__ == "__main__":
     unittest.main()

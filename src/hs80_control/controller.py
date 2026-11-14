@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from concurrent.futures import Future, TimeoutError as FutureTimeout
 from dataclasses import dataclass
-import colorsys
 import logging
-import math
 import queue
 import threading
 import time
@@ -15,6 +13,7 @@ from typing import Callable
 from .alsa import AlsaMixer, MixerError
 from .config import ConfigStore, RGB_MODES
 from .discovery import HidNode, find_control_node, find_wired_headset
+from .effects import ANIMATED_MODES, frame_interval, render_frame
 from .hidapi import HidApi
 from .protocol import (
     CMD_BATTERY,
@@ -43,7 +42,6 @@ from .protocol import (
     encode_rgb_payload,
     encode_sleep_duration,
     parse_battery_percent,
-    parse_color,
     parse_device_identifier,
     parse_headset_firmware,
     parse_microphone_muted,
@@ -123,6 +121,10 @@ class DeviceController:
             rgb_logo=settings["rgb"]["logo"],
             rgb_indicator=settings["rgb"]["indicator"],
             rgb_microphone=settings["rgb"]["microphone"],
+            rgb_speed=settings["rgb"]["speed"],
+            rgb_mute_indicator=settings["rgb"]["mute_indicator"],
+            rgb_mute_color=settings["rgb"]["mute_color"],
+            rgb_battery_saver=settings["rgb"]["battery_saver"],
             sleep_minutes=settings["sleep"]["minutes"],
             battery_notify=settings["battery"]["notify"],
             # Persisted intent is not proof that the user service is running.
@@ -152,6 +154,8 @@ class DeviceController:
         self._next_heartbeat = 0.0
         self._next_animation = 0.0
         self._rgb_dirty = False
+        # Last frame the headset acknowledged; identical frames are not sent.
+        self._rgb_last_payload: bytes | None = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -222,6 +226,19 @@ class DeviceController:
         return bool(
             self._submit(
                 "rgb_patch", mode, brightness, logo, indicator, microphone
+            )
+        )
+
+    def update_rgb_options(
+        self,
+        speed: int | None,
+        mute_indicator: bool | None,
+        mute_color: str | None,
+        battery_saver: str | None,
+    ) -> bool:
+        return bool(
+            self._submit(
+                "rgb_options", speed, mute_indicator, mute_color, battery_saver
             )
         )
 
@@ -326,7 +343,9 @@ class DeviceController:
                 self._write_rgb(now)
             except (OSError, ProtocolError, ControllerError) as exc:
                 self._rgb_write_failed(exc)
-            self._next_animation = now + 0.04
+            self._next_animation = now + frame_interval(
+                self.config.snapshot()["rgb"]["speed"]
+            )
         elif self._transport is not None and online and self._rgb_dirty:
             try:
                 self._write_rgb(now)
@@ -379,6 +398,8 @@ class DeviceController:
             return self._set_rgb(*arguments)
         if operation == "rgb_patch":
             return self._update_rgb(*arguments)
+        if operation == "rgb_options":
+            return self._update_rgb_options(*arguments)
         if operation == "sleep":
             return self._set_sleep_timer(int(arguments[0]))
         if operation == "sidetone":
@@ -642,7 +663,7 @@ class DeviceController:
             self._record_error(exc)
             self._disconnect(graceful=False)
             return
-        self.state.update(
+        self._battery_state_update(
             battery_percent=parse_battery_percent(battery),
             microphone_muted=int(parse_microphone_muted(microphone)),
         )
@@ -701,7 +722,7 @@ class DeviceController:
             try:
                 battery = self._transport.transfer(self._headset.endpoint, CMD_BATTERY)
                 microphone = self._transport.transfer(self._headset.endpoint, CMD_MIC_STATUS)
-                self.state.update(
+                self._battery_state_update(
                     battery_percent=parse_battery_percent(battery),
                     microphone_muted=int(parse_microphone_muted(microphone)),
                     last_error="",
@@ -751,6 +772,17 @@ class DeviceController:
         self._update_rgb_state(settings)
         return self._apply_current_rgb()
 
+    def _update_rgb_options(self, *arguments: object) -> bool:
+        speed, mute_indicator, mute_color, battery_saver = arguments
+        settings = self.config.patch_rgb(
+            speed=None if speed is None else int(speed),
+            mute_indicator=None if mute_indicator is None else bool(mute_indicator),
+            mute_color=None if mute_color is None else str(mute_color),
+            battery_saver=None if battery_saver is None else str(battery_saver),
+        )
+        self._update_rgb_state(settings)
+        return self._apply_current_rgb()
+
     def _update_rgb_state(self, settings: dict[str, object]) -> None:
         self.state.update(
             rgb_mode=settings["mode"],
@@ -758,6 +790,10 @@ class DeviceController:
             rgb_logo=settings["logo"],
             rgb_indicator=settings["indicator"],
             rgb_microphone=settings["microphone"],
+            rgb_speed=settings["speed"],
+            rgb_mute_indicator=settings["mute_indicator"],
+            rgb_mute_color=settings["mute_color"],
+            rgb_battery_saver=settings["battery_saver"],
         )
 
     def _apply_current_rgb(self) -> bool:
@@ -775,39 +811,37 @@ class DeviceController:
     def _animation_active(self) -> bool:
         return (
             self.state.snapshot().headset_connected
-            and self.config.snapshot()["rgb"]["mode"] in {"pulse", "rainbow"}
+            and self.config.snapshot()["rgb"]["mode"] in ANIMATED_MODES
         )
+
+    def _battery_low(self, state: DeviceState) -> bool:
+        if state.charging == 1 or state.connection_mode == "usb":
+            return False
+        threshold = self.config.snapshot()["battery"]["low_percent"]
+        return 0 <= state.battery_percent <= threshold
 
     def _write_rgb(self, now: float) -> None:
         transport, headset = self._require_transport_and_headset()
-        settings = self.config.snapshot()["rgb"]
-        mode = settings["mode"]
-        brightness = settings["brightness"]
-        logo = parse_color(settings["logo"])
-        indicator = parse_color(settings["indicator"])
-        microphone = parse_color(settings["microphone"])
-
-        if mode == "off":
-            logo = indicator = microphone = (0, 0, 0)
-            brightness = 100
-        elif mode == "pulse":
-            pulse = 0.15 + 0.85 * ((math.sin(now * math.pi) + 1.0) / 2.0)
-            brightness = round(brightness * pulse)
-        elif mode == "rainbow":
-            phase = (now % 6.0) / 6.0
-            logo = tuple(round(value * 255) for value in colorsys.hsv_to_rgb(phase, 1.0, 1.0))
-            indicator = tuple(
-                round(value * 255) for value in colorsys.hsv_to_rgb((phase + 0.5) % 1.0, 1.0, 1.0)
-            )
-
         state = self.state.snapshot()
-        if state.microphone_muted == 1 and settings["mute_indicator"]:
-            microphone = (255, 0, 0)
-
+        logo, indicator, microphone, brightness = render_frame(
+            self.config.snapshot()["rgb"],
+            now,
+            muted=state.microphone_muted == 1,
+            battery_low=self._battery_low(state),
+        )
+        payload = encode_rgb_payload(logo, indicator, microphone, brightness)
+        if (
+            self._rgb_endpoint_open
+            and not self._rgb_dirty
+            and payload == self._rgb_last_payload
+        ):
+            # An animation that currently shows the same frame (e.g. the
+            # battery saver turned it dark) needs no radio traffic.
+            return
         if not self._rgb_endpoint_open:
             self._open_rgb_endpoint(transport, headset.endpoint)
-        payload = encode_rgb_payload(logo, indicator, microphone, brightness)
         transport.transfer(headset.endpoint, CMD_RGB_WRITE, payload)
+        self._rgb_last_payload = payload
         self._rgb_dirty = False
 
     def _open_rgb_endpoint(self, transport: HidTransport, endpoint: int) -> None:
@@ -817,6 +851,7 @@ class DeviceController:
         transport.transfer(endpoint, CMD_RGB_CLOSE)
         transport.transfer(endpoint, CMD_RGB_OPEN)
         self._rgb_endpoint_open = True
+        self._rgb_last_payload = None
 
     def _set_sleep_timer(self, minutes: int) -> bool:
         if not 0 <= minutes <= 90:
@@ -901,9 +936,9 @@ class DeviceController:
 
     def _handle_event(self, event: DeviceEvent) -> None:
         if event.kind == "battery" and isinstance(event.value, int):
-            self.state.update(battery_percent=event.value)
+            self._battery_state_update(battery_percent=event.value)
         elif event.kind == "charging" and isinstance(event.value, bool):
-            self.state.update(charging=int(event.value))
+            self._battery_state_update(charging=int(event.value))
         elif event.kind == "microphone" and isinstance(event.value, bool):
             self.state.update(microphone_muted=int(event.value))
             self._rgb_dirty = True
@@ -915,6 +950,13 @@ class DeviceController:
                 self.state.update(headset_connected=False, serial="")
             elif event.value == 2:
                 self._next_heartbeat = 0.0
+
+    def _battery_state_update(self, **values: object) -> None:
+        before = self._battery_low(self.state.snapshot())
+        self.state.update(**values)
+        if self._battery_low(self.state.snapshot()) != before:
+            # Crossing the threshold changes what the battery saver shows.
+            self._rgb_dirty = True
 
     def _require_transport_and_headset(
         self, require_online: bool = True

@@ -20,6 +20,9 @@ import tempfile
 
 
 AUTOSTART_FILENAME = "io.github.hs80control.App.desktop"
+PROFILE_NAME_LENGTH = 40
+PROFILE_LIMIT = 50
+_PROFILE_MODES = ("off", "static", "pulse", "rainbow", "cycle")
 BACKGROUND_FLAG = "--background"
 
 _ENTRY = """[Desktop Entry]
@@ -132,29 +135,95 @@ class Autostart:
             _atomic_write(self.user_path, self._entry())
 
 
+def _is_color(value: object) -> bool:
+    if not isinstance(value, str) or len(value) != 7 or value[0] != "#":
+        return False
+    try:
+        int(value[1:], 16)
+    except ValueError:
+        return False
+    return True
+
+
+def validate_rgb_profile(profile: object) -> dict[str, object]:
+    """Return a clean lighting profile or raise ValueError."""
+
+    if not isinstance(profile, dict):
+        raise ValueError("profile must be an object")
+    mode = profile.get("mode")
+    brightness = profile.get("brightness")
+    speed = profile.get("speed", 3)
+    if mode not in _PROFILE_MODES:
+        raise ValueError(f"unsupported RGB mode: {mode}")
+    for name, value, low, high in (
+        ("brightness", brightness, 0, 100),
+        ("speed", speed, 1, 5),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+            raise ValueError(f"profile {name} must be between {low} and {high}")
+    clean: dict[str, object] = {"mode": mode, "brightness": brightness, "speed": speed}
+    for zone in ("logo", "indicator", "microphone"):
+        if not _is_color(profile.get(zone)):
+            raise ValueError(f"profile {zone} must be a #RRGGBB colour")
+        clean[zone] = str(profile[zone]).lower()
+    return clean
+
+
 class AppSettings:
     """Preferences of the window itself, not of the headset."""
 
-    DEFAULTS: dict[str, bool] = {"tray": True}
-
     def __init__(self, path: Path | None = None) -> None:
         self.path = path or _config_home() / "hs80-control" / "app.json"
-        self._data = dict(self.DEFAULTS)
+        self._tray = True
+        self._profiles: dict[str, dict[str, object]] = {}
         try:
             loaded = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             loaded = {}
-        if isinstance(loaded, dict):
-            for key in self.DEFAULTS:
-                if isinstance(loaded.get(key), bool):
-                    self._data[key] = loaded[key]
+        if not isinstance(loaded, dict):
+            return
+        if isinstance(loaded.get("tray"), bool):
+            self._tray = loaded["tray"]
+        profiles = loaded.get("rgb_profiles")
+        if isinstance(profiles, dict):
+            for name, profile in profiles.items():
+                try:
+                    self._profiles[self._clean_name(name)] = validate_rgb_profile(
+                        profile
+                    )
+                except ValueError:
+                    continue  # Skip a damaged entry, keep the rest.
+
+    @staticmethod
+    def _clean_name(name: object) -> str:
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("Profilname darf nicht leer sein")
+        return name.strip()[:PROFILE_NAME_LENGTH]
+
+    def _save(self) -> None:
+        data = {"tray": self._tray, "rgb_profiles": self._profiles}
+        _atomic_write(self.path, json.dumps(data, indent=2, sort_keys=True) + "\n")
 
     @property
     def tray(self) -> bool:
-        return self._data["tray"]
+        return self._tray
 
     def set_tray(self, enabled: bool) -> None:
-        self._data["tray"] = bool(enabled)
-        _atomic_write(
-            self.path, json.dumps(self._data, indent=2, sort_keys=True) + "\n"
-        )
+        self._tray = bool(enabled)
+        self._save()
+
+    @property
+    def rgb_profiles(self) -> dict[str, dict[str, object]]:
+        return {name: dict(profile) for name, profile in self._profiles.items()}
+
+    def save_rgb_profile(self, name: str, profile: dict[str, object]) -> None:
+        clean_name = self._clean_name(name)
+        clean = validate_rgb_profile(profile)
+        if clean_name not in self._profiles and len(self._profiles) >= PROFILE_LIMIT:
+            raise ValueError(f"Höchstens {PROFILE_LIMIT} Profile möglich")
+        self._profiles[clean_name] = clean
+        self._save()
+
+    def delete_rgb_profile(self, name: str) -> None:
+        if self._profiles.pop(name, None) is not None:
+            self._save()

@@ -4,6 +4,21 @@ Alle nennenswerten Änderungen an HS80 Control. Das Format folgt
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionen folgen
 [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.7.0] – 2026-11-14
+
+### Neu
+- RGB-Modus „Farbwechsel" (`cycle`): alle Zonen wandern weich durch die drei eigenen Farben.
+- Einstellbares Tempo (1–5) für Pulsieren, Regenbogen und Farbwechsel.
+- Stummanzeige in der Oberfläche schaltbar, mit frei wählbarer Farbe.
+- Beleuchtung bei niedrigem Akkustand wahlweise dimmen oder ausschalten.
+- Sofortvorschau: Änderungen auf der RGB-Seite wirken ohne „Anwenden".
+- RGB-Profile speichern, laden und löschen.
+- `hs80ctl rgb` mit `--speed`, `--mute-indicator`, `--mute-color` und `--battery-saver`; D-Bus-Methode `UpdateRgbOptions` und die Eigenschaften `RgbSpeed`, `RgbMuteIndicator`, `RgbMuteColor`, `RgbBatterySaver`.
+
+### Geändert
+- Effekte senden 10 statt 25 Bilder pro Sekunde (bei Tempo 4 und 5 bis zu 20), und unveränderte Bilder werden nicht erneut gesendet. Das spart Funkverkehr und Akku.
+- `hs80ctl` meldet verständlich, wenn der laufende Daemon älter ist als das Kommando.
+
 ## [0.6.0] – 2026-11-14
 
 ### Neu
@@ -89,6 +104,7 @@ Die Warnung ist standardmäßig aktiv, mit den Schwellen 20 % (niedrig) und 10 %
 
 - Erste Veröffentlichung.
 
+[0.7.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.7.0
 [0.6.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.6.0
 [0.5.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.5.0
 [0.4.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.4.0

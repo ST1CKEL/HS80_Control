@@ -72,6 +72,25 @@ class ConfigTests(unittest.TestCase):
             persisted = json.loads(path.read_text(encoding="utf-8"))
             self.assertFalse(persisted["spatial"]["make_default"])
 
+    def test_rgb_options_default_and_validate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            # Written by a release that knew none of the newer keys.
+            path.write_text(json.dumps({"rgb": {"mode": "pulse"}}))
+            store = ConfigStore(path)
+            rgb = store.snapshot()["rgb"]
+            self.assertEqual(
+                ("pulse", 3, "#ff0000", "none"),
+                (rgb["mode"], rgb["speed"], rgb["mute_color"], rgb["battery_saver"]),
+            )
+            store.patch_rgb(mode="cycle", speed=5, battery_saver="dim")
+            self.assertEqual("cycle", ConfigStore(path).snapshot()["rgb"]["mode"])
+            for bad in ({"speed": 6}, {"speed": True}, {"battery_saver": "x"}, {"mute_color": "red"}):
+                with self.subTest(bad=bad):
+                    with self.assertRaises(ValueError):
+                        store.patch_rgb(**bad)
+            self.assertEqual(5, store.snapshot()["rgb"]["speed"])
+
     def test_battery_warning_defaults_and_validation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"

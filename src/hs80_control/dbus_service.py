@@ -38,6 +38,10 @@ _STATE_TO_DBUS = {
     "rgb_logo": "RgbLogo",
     "rgb_indicator": "RgbIndicator",
     "rgb_microphone": "RgbMicrophone",
+    "rgb_speed": "RgbSpeed",
+    "rgb_mute_indicator": "RgbMuteIndicator",
+    "rgb_mute_color": "RgbMuteColor",
+    "rgb_battery_saver": "RgbBatterySaver",
     "sleep_minutes": "SleepMinutes",
     "sidetone_enabled": "SidetoneEnabled",
     "sidetone_db": "SidetoneDb",
@@ -190,6 +194,22 @@ class HS80Service(ServiceInterface):
         return self.controller.snapshot().rgb_microphone
 
     @dbus_property(access=PropertyAccess.READ)
+    def RgbSpeed(self) -> "y":
+        return self.controller.snapshot().rgb_speed
+
+    @dbus_property(access=PropertyAccess.READ)
+    def RgbMuteIndicator(self) -> "b":
+        return self.controller.snapshot().rgb_mute_indicator
+
+    @dbus_property(access=PropertyAccess.READ)
+    def RgbMuteColor(self) -> "s":
+        return self.controller.snapshot().rgb_mute_color
+
+    @dbus_property(access=PropertyAccess.READ)
+    def RgbBatterySaver(self) -> "s":
+        return self.controller.snapshot().rgb_battery_saver
+
+    @dbus_property(access=PropertyAccess.READ)
     def SleepMinutes(self) -> "q":
         return self.controller.snapshot().sleep_minutes
 
@@ -278,6 +298,25 @@ class HS80Service(ServiceInterface):
                 logo or None,
                 indicator or None,
                 microphone or None,
+            )
+        )
+
+    @method()
+    async def UpdateRgbOptions(
+        self,
+        speed: "n",
+        mute_indicator: "n",
+        mute_color: "s",
+        battery_saver: "s",
+    ) -> "b":
+        # Negative numbers and empty strings keep the current value.
+        return bool(
+            await self._call(
+                self.controller.update_rgb_options,
+                None if speed < 0 else speed,
+                None if mute_indicator < 0 else bool(mute_indicator),
+                mute_color or None,
+                battery_saver or None,
             )
         )
 

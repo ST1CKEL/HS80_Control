@@ -34,6 +34,10 @@ class DeviceState:
     rgb_logo: str = "#00bfff"
     rgb_indicator: str = "#00bfff"
     rgb_microphone: str = "#00ffff"
+    rgb_speed: int = 3
+    rgb_mute_indicator: bool = True
+    rgb_mute_color: str = "#ff0000"
+    rgb_battery_saver: str = "none"
     sleep_minutes: int = 15
     sidetone_enabled: bool = False
     sidetone_db: float = -42.0

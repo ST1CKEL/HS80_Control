@@ -809,6 +809,91 @@ class ControllerTests(unittest.TestCase):
                     )
             self.assertEqual([2, 4, 8, 16, 30, 30], delays)
 
+    def _connected_controller(self, directory: str, transport: FakeTransport):
+        node = self._backoff_node(True)
+        controller = DeviceController(
+            config=ConfigStore(Path(directory) / "config.json"),
+            mixer=FakeMixer(),  # type: ignore[arg-type]
+            spatial=FakeSpatial(),  # type: ignore[arg-type]
+            node_finder=lambda: node,
+            transport_factory=lambda _node, _callback: transport,  # type: ignore[arg-type]
+            wired_finder=lambda: None,
+        )
+        controller._try_connect()
+        self.assertTrue(controller.snapshot().headset_connected)
+        return controller
+
+    @staticmethod
+    def _rgb_frames(transport: FakeTransport) -> list[bytes]:
+        return [call[2] for call in transport.calls if call[1] == CMD_RGB_WRITE]
+
+    def test_identical_frames_are_not_sent_again(self) -> None:
+        transport = FakeTransport()
+        with tempfile.TemporaryDirectory() as directory:
+            controller = self._connected_controller(directory, transport)
+            controller._set_rgb("static", 50, "#ff0000", "#00ff00", "#0000ff")
+            self.assertEqual(1, len(self._rgb_frames(transport)))
+
+            controller._write_rgb(time.monotonic())
+            controller._write_rgb(time.monotonic() + 5.0)
+            self.assertEqual(1, len(self._rgb_frames(transport)))
+
+            # An explicit change is always written, even with equal content.
+            controller._set_rgb("static", 50, "#ff0000", "#00ff00", "#0000ff")
+            self.assertEqual(2, len(self._rgb_frames(transport)))
+            controller._disconnect(graceful=True)
+
+    def test_rgb_options_are_persisted_and_published(self) -> None:
+        transport = FakeTransport()
+        with tempfile.TemporaryDirectory() as directory:
+            controller = self._connected_controller(directory, transport)
+            # FakeTransport reports a muted microphone.
+            controller._set_rgb("static", 100, "#000000", "#000000", "#0000ff")
+            self.assertEqual(255, self._rgb_frames(transport)[-1][4 + 2])
+
+            controller._update_rgb_options(5, None, "#00ff00", "dim")
+            state = controller.snapshot()
+            self.assertEqual(
+                (5, True, "#00ff00", "dim"),
+                (
+                    state.rgb_speed,
+                    state.rgb_mute_indicator,
+                    state.rgb_mute_color,
+                    state.rgb_battery_saver,
+                ),
+            )
+            # Planar RRR GGG BBB: the microphone zone is now green.
+            frame = self._rgb_frames(transport)[-1][4:]
+            self.assertEqual((0, 255, 0), (frame[2], frame[5], frame[8]))
+
+            controller._update_rgb_options(None, False, None, None)
+            frame = self._rgb_frames(transport)[-1][4:]
+            self.assertEqual((0, 0, 255), (frame[2], frame[5], frame[8]))
+            saved = ConfigStore(Path(directory) / "config.json").snapshot()["rgb"]
+            self.assertEqual((5, False, "dim"), (saved["speed"], saved["mute_indicator"], saved["battery_saver"]))
+            controller._disconnect(graceful=True)
+
+    def test_battery_saver_reacts_when_the_threshold_is_crossed(self) -> None:
+        from hs80_control.protocol import DeviceEvent
+
+        transport = FakeTransport()
+        with tempfile.TemporaryDirectory() as directory:
+            controller = self._connected_controller(directory, transport)
+            controller._update_rgb_options(None, False, None, "off")
+            controller._set_rgb("static", 100, "#ffffff", "#ffffff", "#ffffff")
+            self.assertEqual(bytes([255] * 9), self._rgb_frames(transport)[-1][4:])
+
+            controller._handle_event(DeviceEvent("battery", 20, b""))
+            self.assertTrue(controller._rgb_dirty)
+            controller._write_rgb(time.monotonic())
+            self.assertEqual(bytes(9), self._rgb_frames(transport)[-1][4:])
+
+            # Charging lifts the saver again.
+            controller._handle_event(DeviceEvent("charging", True, b""))
+            controller._write_rgb(time.monotonic())
+            self.assertEqual(bytes([255] * 9), self._rgb_frames(transport)[-1][4:])
+            controller._disconnect(graceful=True)
+
     def test_battery_warning_switch_is_on_by_default_and_persisted(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"

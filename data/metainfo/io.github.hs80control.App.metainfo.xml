@@ -36,6 +36,11 @@
     <modalias>usb:v1B1Cp0A69d*</modalias>
   </provides>
   <releases>
+    <release version="0.7.0" date="2026-11-14">
+      <description>
+        <p>Lighting changes now apply live. Adds a colour-cycle mode, adjustable tempo, saved lighting profiles, a mute indicator with a free colour, and optional dimming at low battery. Effects use fewer frames to save battery.</p>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-11-14">
       <description>
         <p>Adds a system tray icon that shows the battery level. The app now starts minimised in the tray at login and stays there when its window is closed; both can be switched off on the overview page.</p>

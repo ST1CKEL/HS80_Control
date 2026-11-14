@@ -13,7 +13,8 @@ from typing import Any
 from .protocol import ProtocolError, parse_color
 
 
-RGB_MODES = frozenset({"off", "static", "pulse", "rainbow"})
+RGB_MODES = frozenset({"off", "static", "pulse", "rainbow", "cycle"})
+RGB_BATTERY_SAVERS = frozenset({"none", "dim", "off"})
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "version": 1,
@@ -24,6 +25,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "indicator": "#00bfff",
         "microphone": "#00ffff",
         "mute_indicator": True,
+        "mute_color": "#ff0000",
+        # 1 (slow) .. 5 (fast); 3 is the tempo of earlier releases.
+        "speed": 3,
+        # What the lighting does at or below battery.low_percent.
+        "battery_saver": "none",
         "apply_on_connect": False,
     },
     "sleep": {"minutes": 15, "apply_on_connect": False},
@@ -76,7 +82,13 @@ def validate_config(data: dict[str, Any]) -> dict[str, Any]:
     if not 0 <= brightness <= 100:
         raise ProtocolError("RGB brightness must be between 0 and 100")
     rgb["brightness"] = brightness
-    for key in ("logo", "indicator", "microphone"):
+    if isinstance(rgb.get("speed"), bool) or not isinstance(rgb.get("speed"), int):
+        raise ProtocolError("RGB speed must be an integer")
+    if not 1 <= rgb["speed"] <= 5:
+        raise ProtocolError("RGB speed must be between 1 and 5")
+    if rgb.get("battery_saver") not in RGB_BATTERY_SAVERS:
+        raise ProtocolError(f"unsupported RGB battery saver: {rgb.get('battery_saver')}")
+    for key in ("logo", "indicator", "microphone", "mute_color"):
         if not isinstance(rgb.get(key), str):
             raise ProtocolError(f"RGB {key} must be a string")
         parse_color(rgb[key])
@@ -171,6 +183,10 @@ class ConfigStore:
         logo: str | None = None,
         indicator: str | None = None,
         microphone: str | None = None,
+        speed: int | None = None,
+        mute_indicator: bool | None = None,
+        mute_color: str | None = None,
+        battery_saver: str | None = None,
         apply_on_connect: bool = True,
     ) -> dict[str, Any]:
         """Atomically merge an RGB update with the daemon's current profile."""
@@ -184,6 +200,10 @@ class ConfigStore:
                 ("logo", logo),
                 ("indicator", indicator),
                 ("microphone", microphone),
+                ("speed", speed),
+                ("mute_indicator", mute_indicator),
+                ("mute_color", mute_color),
+                ("battery_saver", battery_saver),
             ):
                 if value is not None:
                     updates[key] = value

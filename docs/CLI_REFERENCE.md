@@ -97,11 +97,17 @@ hs80ctl doctor
 Konfiguriert den Beleuchtungsmodus, die Helligkeit und die Farben einzelner Zonen.
 
 ```bash
-hs80ctl rgb <off | static | pulse | rainbow> [Optionen]
+hs80ctl rgb <off | static | pulse | rainbow | cycle> [Optionen]
 ```
+
+`cycle` lässt alle Zonen gemeinsam weich durch die drei eingestellten Farben (Logo → Statusanzeige → Mikrofon) wandern.
 
 **Optionen:**
 - `--brightness <0..100>`: Helligkeit in Prozent.
+- `--speed <1..5>`: Tempo von `pulse`, `rainbow` und `cycle` (3 = Standard).
+- `--mute-indicator <on | off>`: Mikrofon-LED bei Stummschaltung umfärben.
+- `--mute-color <#RRGGBB>`: Farbe der Stummanzeige (Standard `#ff0000`).
+- `--battery-saver <none | dim | off>`: Beleuchtung bei niedrigem Akkustand unverändert lassen, auf 30 % dimmen oder ausschalten. Greift ab der Schwelle der Akkuwarnung, nicht während des Ladens.
 - `--logo <#RRGGBB>`: Farbe des beleuchteten Corsair-Logos auf den Ohrmuscheln.
 - `--indicator <#RRGGBB>`: Farbe der Status-LED am Headset.
 - `--microphone <#RRGGBB>`: Farbe des LED-Rings an der Mikrofonspitze.
@@ -119,6 +125,12 @@ hs80ctl rgb pulse --brightness 80 --logo '#bf00ff'
 
 # Regenbogen-Farbverlauf
 hs80ctl rgb rainbow --brightness 100
+
+# Schneller Farbwechsel zwischen drei eigenen Farben
+hs80ctl rgb cycle --speed 5 --logo '#ff0000' --indicator '#00ff00' --microphone '#0000ff'
+
+# Stummanzeige in Orange, Beleuchtung bei niedrigem Akku dimmen
+hs80ctl rgb static --mute-color '#ff8800' --battery-saver dim
 ```
 
 ---

@@ -13,7 +13,12 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
 from . import __version__
-from .autostart import BACKGROUND_FLAG, AppSettings, Autostart
+from .autostart import (
+    BACKGROUND_FLAG,
+    PROFILE_NAME_LENGTH,
+    AppSettings,
+    Autostart,
+)
 from .config import ConfigStore
 from .tray import TrayIcon, is_gnome, tooltip_text
 from .dbus_service import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
@@ -23,6 +28,17 @@ APP_ID = "io.github.hs80control.App"
 DBUS_CALL_TIMEOUT_MS = 30_000
 SPATIAL_DBUS_CALL_TIMEOUT_MS = 60_000
 TRAY_WAIT_SECONDS = 20
+# Collects slider and colour-picker bursts into one live update.
+LIVE_APPLY_DELAY_MS = 150
+RGB_MODE_ORDER = ("off", "static", "pulse", "rainbow", "cycle")
+RGB_MODE_LABELS = ("Aus", "Statisch", "Pulsieren", "Regenbogen", "Farbwechsel")
+RGB_ANIMATED_MODES = frozenset({"pulse", "rainbow", "cycle"})
+BATTERY_SAVER_ORDER = ("none", "dim", "off")
+BATTERY_SAVER_LABELS = ("Unverändert", "Dimmen", "Ausschalten")
+RGB_KEYS = frozenset({"mode", "brightness", "logo", "indicator", "microphone"})
+RGB_OPTION_KEYS = frozenset(
+    {"speed", "mute_indicator", "mute_color", "battery_saver"}
+)
 
 _CSS = b"""
 .connection-pill {
@@ -210,6 +226,7 @@ class HS80Window(Adw.ApplicationWindow):
         self._syncing = False
         self._lighting_dirty: set[str] = set()
         self._lighting_apply_pending = False
+        self._lighting_timer = 0
         self._microphone_dirty: set[str] = set()
         self._microphone_apply_pending = False
 
@@ -519,16 +536,46 @@ class HS80Window(Adw.ApplicationWindow):
         page = Adw.PreferencesPage()
         settings = self.config.snapshot()["rgb"]
 
+        profiles = Adw.PreferencesGroup(
+            title="Profile",
+            description="Gespeicherte Kombinationen aus Modus, Helligkeit, Tempo und Farben.",
+        )
+        profile_row = Adw.ActionRow(title="Profil laden")
+        self.profile_model = Gtk.StringList()
+        self.profile_dropdown = Gtk.DropDown(model=self.profile_model)
+        self.profile_dropdown.set_valign(Gtk.Align.CENTER)
+        self.profile_dropdown.connect("notify::selected", self._profile_selected)
+        profile_row.add_suffix(self.profile_dropdown)
+        self.profile_delete_button = Gtk.Button.new_from_icon_name(
+            "user-trash-symbolic"
+        )
+        self.profile_delete_button.set_tooltip_text("Ausgewähltes Profil löschen")
+        self.profile_delete_button.set_valign(Gtk.Align.CENTER)
+        self.profile_delete_button.add_css_class("flat")
+        self.profile_delete_button.connect("clicked", self._delete_profile)
+        profile_row.add_suffix(self.profile_delete_button)
+        profiles.add(profile_row)
+        save_row = Adw.ActionRow(title="Aktuelle Beleuchtung als Profil speichern")
+        save_button = Gtk.Button(label="Speichern …")
+        save_button.set_valign(Gtk.Align.CENTER)
+        save_button.connect("clicked", self._save_profile_dialog)
+        save_row.add_suffix(save_button)
+        save_row.set_activatable_widget(save_button)
+        profiles.add(save_row)
+        page.add(profiles)
+        self._reload_profiles()
+
         group = Adw.PreferencesGroup(
             title="Beleuchtung",
-            description="Die Effekte werden vom Daemon erzeugt; statische Farben sparen Akku.",
+            description=(
+                "Änderungen wirken sofort. Die Effekte erzeugt der Daemon; "
+                "statische Farben sparen Akku."
+            ),
         )
         mode_row = Adw.ActionRow(title="Modus")
-        self.rgb_mode = Gtk.DropDown.new_from_strings(
-            ["Aus", "Statisch", "Pulsieren", "Regenbogen"]
-        )
+        self.rgb_mode = Gtk.DropDown.new_from_strings(list(RGB_MODE_LABELS))
         self.rgb_mode.set_valign(Gtk.Align.CENTER)
-        modes = ["off", "static", "pulse", "rainbow"]
+        modes = list(RGB_MODE_ORDER)
         self.rgb_mode.set_selected(modes.index(settings["mode"]))
         self.rgb_mode.connect(
             "notify::selected", lambda *_: self._lighting_changed("mode")
@@ -550,6 +597,23 @@ class HS80Window(Adw.ApplicationWindow):
         brightness_row.add_suffix(self.rgb_brightness)
         group.add(brightness_row)
 
+        self.speed_row = Adw.ActionRow(
+            title="Tempo", subtitle="Für Pulsieren, Regenbogen und Farbwechsel"
+        )
+        self.rgb_speed = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 1, 5, 1)
+        self.rgb_speed.set_value(settings["speed"])
+        self.rgb_speed.set_round_digits(0)
+        self.rgb_speed.set_draw_value(False)
+        for mark, label in ((1, "langsam"), (3, None), (5, "schnell")):
+            self.rgb_speed.add_mark(mark, Gtk.PositionType.BOTTOM, label)
+        self.rgb_speed.set_size_request(260, -1)
+        self.rgb_speed.set_valign(Gtk.Align.CENTER)
+        self.rgb_speed.connect(
+            "value-changed", lambda *_: self._lighting_changed("speed")
+        )
+        self.speed_row.add_suffix(self.rgb_speed)
+        group.add(self.speed_row)
+
         self.logo_color = self._color_row(group, "Logo", settings["logo"], "logo")
         self.indicator_color = self._color_row(
             group, "Statusanzeige", settings["indicator"], "indicator"
@@ -559,7 +623,41 @@ class HS80Window(Adw.ApplicationWindow):
         )
         page.add(group)
 
+        mute = Adw.PreferencesGroup(
+            title="Stummanzeige",
+            description="Zeigt an der Mikrofon-LED, dass das Mikrofon stumm ist.",
+        )
+        self.mute_indicator_switch = Adw.SwitchRow(
+            title="Mikrofon-LED bei Stummschaltung umfärben"
+        )
+        self.mute_indicator_switch.set_active(settings["mute_indicator"])
+        self.mute_indicator_switch.connect(
+            "notify::active", lambda *_: self._lighting_changed("mute_indicator")
+        )
+        mute.add(self.mute_indicator_switch)
+        self.mute_color = self._color_row(
+            mute, "Farbe bei Stummschaltung", settings["mute_color"], "mute_color"
+        )
+        page.add(mute)
+
         power = Adw.PreferencesGroup(title="Energie")
+        saver_row = Adw.ActionRow(
+            title="Beleuchtung bei niedrigem Akkustand",
+            subtitle=f"Ab {self.low_battery_percent} %, nicht während des Ladens",
+        )
+        self.battery_saver = Gtk.DropDown.new_from_strings(
+            list(BATTERY_SAVER_LABELS)
+        )
+        self.battery_saver.set_valign(Gtk.Align.CENTER)
+        self.battery_saver.set_selected(
+            BATTERY_SAVER_ORDER.index(settings["battery_saver"])
+        )
+        self.battery_saver.connect(
+            "notify::selected", lambda *_: self._lighting_changed("battery_saver")
+        )
+        saver_row.add_suffix(self.battery_saver)
+        saver_row.set_activatable_widget(self.battery_saver)
+        power.add(saver_row)
         sleep_row = Adw.ActionRow(
             title="Automatisch ausschalten",
             subtitle="0 deaktiviert den Timer; maximal 90 Minuten",
@@ -574,17 +672,7 @@ class HS80Window(Adw.ApplicationWindow):
         power.add(sleep_row)
         page.add(power)
 
-        actions = Adw.PreferencesGroup()
-        apply_row = Adw.ActionRow(title="Profil anwenden")
-        apply = Gtk.Button(label="Anwenden")
-        self.lighting_apply_button = apply
-        apply.add_css_class("suggested-action")
-        apply.set_valign(Gtk.Align.CENTER)
-        apply.connect("clicked", self._apply_lighting)
-        apply_row.add_suffix(apply)
-        apply_row.set_activatable_widget(apply)
-        actions.add(apply_row)
-        page.add(actions)
+        self._update_speed_sensitivity()
         self.lighting_mute_banner = Adw.Banner(revealed=False)
         lighting_wrapper = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         lighting_wrapper.append(self.lighting_mute_banner)
@@ -772,17 +860,126 @@ class HS80Window(Adw.ApplicationWindow):
             self._microphone_dirty.add(setting)
 
     def _lighting_changed(self, setting: str) -> None:
-        if not self._syncing:
-            self._lighting_dirty.add(setting)
+        if self._syncing:
+            return
+        self._lighting_dirty.add(setting)
+        if setting == "mode":
+            self._update_speed_sensitivity()
+        # Live preview: apply shortly after the last change of a burst.
+        if self._lighting_timer:
+            GLib.source_remove(self._lighting_timer)
+        self._lighting_timer = GLib.timeout_add(
+            LIVE_APPLY_DELAY_MS, self._lighting_timeout
+        )
 
-    def _set_lighting_controls_sensitive(self, sensitive: bool) -> None:
-        self.rgb_mode.set_sensitive(sensitive)
-        self.rgb_brightness.set_sensitive(sensitive)
-        self.logo_color.set_sensitive(sensitive)
-        self.indicator_color.set_sensitive(sensitive)
-        self.microphone_color.set_sensitive(sensitive)
-        self.sleep_spin.set_sensitive(sensitive)
-        self.lighting_apply_button.set_sensitive(sensitive)
+    def _lighting_timeout(self) -> bool:
+        self._lighting_timer = 0
+        self._apply_lighting(None)
+        return GLib.SOURCE_REMOVE
+
+    def _update_speed_sensitivity(self) -> None:
+        selected = self.rgb_mode.get_selected()
+        animated = (
+            selected < len(RGB_MODE_ORDER)
+            and RGB_MODE_ORDER[selected] in RGB_ANIMATED_MODES
+        )
+        self.speed_row.set_sensitive(animated)
+
+    def _lighting_values(self) -> dict[str, object]:
+        """The lighting as currently shown by the controls."""
+
+        return {
+            "mode": RGB_MODE_ORDER[self.rgb_mode.get_selected()],
+            "brightness": round(self.rgb_brightness.get_value()),
+            "logo": _hex_color(self.logo_color.get_rgba()),
+            "indicator": _hex_color(self.indicator_color.get_rgba()),
+            "microphone": _hex_color(self.microphone_color.get_rgba()),
+            "speed": round(self.rgb_speed.get_value()),
+        }
+
+    # -- profiles ------------------------------------------------------
+
+    def _reload_profiles(self, select: str = "") -> None:
+        names = sorted(self.app.settings.rgb_profiles, key=str.casefold)
+        self._profile_names = names
+        self._syncing_profiles = True
+        self.profile_model.splice(
+            0, self.profile_model.get_n_items(), ["–", *names]
+        )
+        self.profile_dropdown.set_selected(
+            names.index(select) + 1 if select in names else 0
+        )
+        self._syncing_profiles = False
+        self.profile_dropdown.set_sensitive(bool(names))
+        self.profile_delete_button.set_sensitive(select in names)
+
+    def _profile_selected(self, dropdown: Gtk.DropDown, _property: object) -> None:
+        if getattr(self, "_syncing_profiles", False):
+            return
+        index = dropdown.get_selected() - 1
+        chosen = 0 <= index < len(self._profile_names)
+        self.profile_delete_button.set_sensitive(chosen)
+        if not chosen:
+            return
+        profile = self.app.settings.rgb_profiles.get(self._profile_names[index])
+        if profile is None:
+            return
+        # Setting the controls triggers the same live update as a user edit.
+        self.rgb_mode.set_selected(RGB_MODE_ORDER.index(profile["mode"]))
+        self.rgb_brightness.set_value(profile["brightness"])
+        self.logo_color.set_rgba(_rgba(profile["logo"]))
+        self.indicator_color.set_rgba(_rgba(profile["indicator"]))
+        self.microphone_color.set_rgba(_rgba(profile["microphone"]))
+        self.rgb_speed.set_value(profile["speed"])
+        for key in ("mode", "brightness", "logo", "indicator", "microphone", "speed"):
+            self._lighting_changed(key)
+
+    def _save_profile_dialog(self, _button: Gtk.Button) -> None:
+        dialog = Adw.AlertDialog(
+            heading="Profil speichern",
+            body="Ein vorhandenes Profil gleichen Namens wird überschrieben.",
+        )
+        entry = Gtk.Entry(placeholder_text="Name", max_length=PROFILE_NAME_LENGTH)
+        entry.set_activates_default(True)
+        index = self.profile_dropdown.get_selected() - 1
+        if 0 <= index < len(self._profile_names):
+            entry.set_text(self._profile_names[index])
+        dialog.set_extra_child(entry)
+        dialog.add_response("cancel", "Abbrechen")
+        dialog.add_response("save", "Speichern")
+        dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("save")
+        dialog.set_close_response("cancel")
+
+        def responded(_dialog: Adw.AlertDialog, response: str) -> None:
+            name = entry.get_text().strip()
+            if response != "save" or not name:
+                return
+            try:
+                self.app.settings.save_rgb_profile(name, self._lighting_values())
+            except (OSError, ValueError) as exc:
+                self.toast_overlay.add_toast(Adw.Toast(title=str(exc), timeout=5))
+                return
+            self._reload_profiles(select=name)
+            self.toast_overlay.add_toast(
+                Adw.Toast(title=f"Profil „{name}“ gespeichert")
+            )
+
+        dialog.connect("response", responded)
+        dialog.present(self)
+
+    def _delete_profile(self, _button: Gtk.Button) -> None:
+        index = self.profile_dropdown.get_selected() - 1
+        if not 0 <= index < len(self._profile_names):
+            return
+        name = self._profile_names[index]
+        try:
+            self.app.settings.delete_rgb_profile(name)
+        except OSError as exc:
+            self.toast_overlay.add_toast(Adw.Toast(title=str(exc), timeout=5))
+            return
+        self._reload_profiles()
+        self.toast_overlay.add_toast(Adw.Toast(title=f"Profil „{name}“ gelöscht"))
 
     def _set_microphone_controls_sensitive(self, sensitive: bool) -> None:
         self.sidetone_switch.set_sensitive(sensitive)
@@ -876,7 +1073,7 @@ class HS80Window(Adw.ApplicationWindow):
         sofa_file = str(self._property("SpatialSofaFile", ""))
         self.hrtf_row.set_subtitle(sofa_file or "Keine Datei ausgewählt")
         if not self._lighting_apply_pending:
-            modes = ["off", "static", "pulse", "rainbow"]
+            modes = list(RGB_MODE_ORDER)
             if "mode" not in self._lighting_dirty:
                 mode = str(self._property("RgbMode", "static"))
                 self.rgb_mode.set_selected(modes.index(mode) if mode in modes else 1)
@@ -900,6 +1097,24 @@ class HS80Window(Adw.ApplicationWindow):
                 self.sleep_spin.set_value(
                     float(self._property("SleepMinutes", 15))
                 )
+            if "speed" not in self._lighting_dirty:
+                self.rgb_speed.set_value(float(self._property("RgbSpeed", 3)))
+            if "mute_indicator" not in self._lighting_dirty:
+                self.mute_indicator_switch.set_active(
+                    bool(self._property("RgbMuteIndicator", True))
+                )
+            if "mute_color" not in self._lighting_dirty:
+                self.mute_color.set_rgba(
+                    _rgba(str(self._property("RgbMuteColor", "#ff0000")))
+                )
+            if "battery_saver" not in self._lighting_dirty:
+                saver = str(self._property("RgbBatterySaver", "none"))
+                self.battery_saver.set_selected(
+                    BATTERY_SAVER_ORDER.index(saver)
+                    if saver in BATTERY_SAVER_ORDER
+                    else 0
+                )
+            self._update_speed_sensitivity()
         if not self._microphone_apply_pending:
             if "sidetone_enabled" not in self._microphone_dirty:
                 self.sidetone_switch.set_active(
@@ -920,7 +1135,6 @@ class HS80Window(Adw.ApplicationWindow):
         self._set_microphone_controls_sensitive(
             mixer_available and not self._microphone_apply_pending
         )
-        self._set_lighting_controls_sensitive(not self._lighting_apply_pending)
         self._syncing = False
 
     def _poll(self) -> bool:
@@ -1052,13 +1266,29 @@ class HS80Window(Adw.ApplicationWindow):
         self.toast_overlay.add_toast(Adw.Toast(title=message))
 
     def _apply_lighting(self, _button: Gtk.Button | None) -> None:
+        """Send what changed since the last update; used by the live preview."""
+
         if self._lighting_apply_pending:
+            # _finish_lighting picks up whatever changed in the meantime.
             return
-        modes = ["off", "static", "pulse", "rainbow"]
+        dirty = set(self._lighting_dirty)
+        if not dirty:
+            return
+        modes = list(RGB_MODE_ORDER)
         try:
-            mode = modes[self.rgb_mode.get_selected()]
-            rgb_parameters = self._rgb_parameters(mode)
-            sleep_minutes = round(self.sleep_spin.get_value())
+            calls: list[tuple[str, GLib.Variant]] = []
+            if dirty & RGB_KEYS:
+                mode = modes[self.rgb_mode.get_selected()]
+                calls.append(("SetRgb", self._rgb_parameters(mode)))
+            if dirty & RGB_OPTION_KEYS:
+                calls.append(("UpdateRgbOptions", self._rgb_option_parameters()))
+            if "sleep" in dirty:
+                calls.append(
+                    (
+                        "SetSleepTimer",
+                        GLib.Variant("(q)", (round(self.sleep_spin.get_value()),)),
+                    )
+                )
         except (AttributeError, IndexError, TypeError, ValueError) as exc:
             self.toast_overlay.add_toast(
                 Adw.Toast(
@@ -1068,40 +1298,38 @@ class HS80Window(Adw.ApplicationWindow):
             )
             return
 
+        # Controls stay usable: disabling them would break a slider drag.
         self._lighting_apply_pending = True
-        self._set_lighting_controls_sensitive(False)
+        self._lighting_dirty -= dirty
 
-        def finish(success: bool, applied: bool = False) -> None:
-            self._lighting_apply_pending = False
-            if success:
-                self._lighting_dirty.clear()
-                mute_hint = _lighting_mute_hint(
-                    int(self._property("MicrophoneMuted", -1))
-                )
-                if mute_hint:
-                    self.toast_overlay.add_toast(
-                        Adw.Toast(title=f"Profil gespeichert – {mute_hint}", timeout=6)
-                    )
-                else:
-                    self._show_apply_result(applied)
-            self._sync_state()
+        def run(success: bool = True, _applied: bool = False) -> None:
+            if success and calls:
+                method, parameters = calls.pop(0)
+                self._call(method, parameters, run, show_result=False)
+            else:
+                self._finish_lighting()
 
-        def after_rgb(success: bool, rgb_applied: bool) -> None:
-            if not success:
-                finish(False)
-                return
+        run()
 
-            def after_sleep(sleep_success: bool, sleep_applied: bool) -> None:
-                finish(sleep_success, rgb_applied and sleep_applied)
-
-            self._call(
-                "SetSleepTimer",
-                GLib.Variant("(q)", (sleep_minutes,)),
-                after_sleep,
-                show_result=False,
+    def _finish_lighting(self) -> None:
+        self._lighting_apply_pending = False
+        # After a failure the controls fall back to what the daemon reports.
+        self._sync_state()
+        if self._lighting_dirty and not self._lighting_timer:
+            self._lighting_timer = GLib.timeout_add(
+                LIVE_APPLY_DELAY_MS, self._lighting_timeout
             )
 
-        self._call("SetRgb", rgb_parameters, after_rgb, show_result=False)
+    def _rgb_option_parameters(self) -> GLib.Variant:
+        return GLib.Variant(
+            "(nnss)",
+            (
+                round(self.rgb_speed.get_value()),
+                int(self.mute_indicator_switch.get_active()),
+                _hex_color(self.mute_color.get_rgba()),
+                BATTERY_SAVER_ORDER[self.battery_saver.get_selected()],
+            ),
+        )
 
     def _apply_microphone(self, _button: Gtk.Button) -> None:
         if self._microphone_apply_pending:

@@ -169,6 +169,7 @@ class GuiPresentationTests(unittest.TestCase):
 
         class BrokenLightingPage:
             _lighting_apply_pending = False
+            _lighting_dirty = {"logo"}
             rgb_mode = SimpleNamespace(get_selected=lambda: 1)
             sleep_spin = SimpleNamespace(get_value=lambda: 15)
             toast_overlay = ToastRecorder()
@@ -177,15 +178,57 @@ class GuiPresentationTests(unittest.TestCase):
             def _rgb_parameters(_mode: str) -> object:
                 raise AttributeError("invalid color")
 
-            @staticmethod
-            def _set_lighting_controls_sensitive(_sensitive: bool) -> None:
-                raise AssertionError("controls must not be disabled")
-
         page = BrokenLightingPage()
         self.gui.HS80Window._apply_lighting(page, None)
 
         self.assertFalse(page._lighting_apply_pending)
         self.assertEqual(1, len(page.toast_overlay.toasts))
+
+    def test_live_update_sends_only_the_changed_groups(self) -> None:
+        sent: list[tuple[str, tuple[object, ...]]] = []
+
+        class Page:
+            _lighting_apply_pending = False
+            _lighting_timer = 0
+            rgb_mode = SimpleNamespace(get_selected=lambda: 4)
+            rgb_speed = SimpleNamespace(get_value=lambda: 5)
+            sleep_spin = SimpleNamespace(get_value=lambda: 15)
+            mute_indicator_switch = SimpleNamespace(get_active=lambda: False)
+            battery_saver = SimpleNamespace(get_selected=lambda: 1)
+            toast_overlay = SimpleNamespace(add_toast=lambda _toast: None)
+            synced = 0
+
+            def __init__(page, gui: object) -> None:
+                page._lighting_dirty = {"speed", "battery_saver"}
+                page.mute_color = SimpleNamespace(
+                    get_rgba=lambda: gui._rgba("#ff8800")
+                )
+                page._rgb_option_parameters = (
+                    lambda: gui.HS80Window._rgb_option_parameters(page)
+                )
+                page._finish_lighting = (
+                    lambda: gui.HS80Window._finish_lighting(page)
+                )
+
+            def _rgb_parameters(page, _mode: str) -> object:
+                raise AssertionError("colours did not change")
+
+            def _call(page, method, parameters, callback, show_result=True):
+                sent.append((method, parameters.unpack()))
+                callback(True, True)
+
+            def _sync_state(page) -> None:
+                page.synced += 1
+
+        page = Page(self.gui)
+        self.gui.HS80Window._apply_lighting(page, None)
+
+        self.assertEqual(
+            [("UpdateRgbOptions", (5, 0, "#ff8800", "dim"))], sent
+        )
+        self.assertEqual(set(), page._lighting_dirty)
+        self.assertFalse(page._lighting_apply_pending)
+        self.assertEqual(1, page.synced)
 
 
 if __name__ == "__main__":
