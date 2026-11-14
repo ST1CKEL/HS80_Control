@@ -5,11 +5,12 @@
 # HS80 Control — Native Linux-Treiber & Steuerung für das Corsair HS80 RGB Wireless
 
 [![Checks](https://github.com/ST1CKEL/HS80_Control/actions/workflows/check.yml/badge.svg)](https://github.com/ST1CKEL/HS80_Control/actions/workflows/check.yml)
+[![Release](https://img.shields.io/github/v/release/ST1CKEL/HS80_Control?label=Release)](https://github.com/ST1CKEL/HS80_Control/releases/latest)
 [![Lizenz](https://img.shields.io/badge/Lizenz-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab.svg)](https://www.python.org/)
 [![GTK4](https://img.shields.io/badge/GUI-GTK4%20%2F%20libadwaita%20%E2%89%A5%201.7-4a90d9.svg)](https://gnome.pages.gitlab.gnome.org/libadwaita/)
 [![Audio](https://img.shields.io/badge/Audio-PipeWire%20%2F%20ALSA-green.svg)](https://pipewire.org/)
-[![Fedora](https://img.shields.io/badge/Getestet%20auf-Fedora%2044-51a2da.svg)](https://fedoraproject.org/)
+[![Fedora](https://img.shields.io/badge/Getestet%20auf-Fedora%2044%20%7C%2045-51a2da.svg)](https://fedoraproject.org/)
 
 **HS80 Control** ist eine performante, native Linux-Lösung zur vollständigen Steuerung des **Corsair HS80 RGB Wireless** Gaming-Headsets. Sowohl der kabellose Funkbetrieb über den mitgelieferten USB-Transceiver (`1b1c:0a6b`) als auch der direkte Kabelbetrieb (`1b1c:0a69`) werden nativ und ohne Windows oder iCUE unterstützt.
 
@@ -36,6 +37,7 @@ Die Suite umfasst einen leichtgewichtigen Hintergrunddienst (`hs80d`), eine asyn
 - [Protokoll & Reverse Engineering](#protokoll--reverse-engineering)
 - [Fehlerbehebung & Diagnose (Doctor)](#fehlerbehebung--diagnose-doctor)
 - [Entwicklung, Tests & Paketbau](#entwicklung-tests--paketbau)
+- [Mitwirken](#mitwirken)
 - [Lizenz & Haftungsausschluss](#lizenz--haftungsausschluss)
 
 ---
@@ -531,6 +533,12 @@ rpmbuild -ba packaging/hs80-control.spec \
   --define "_tmppath $PWD/build/rpmbuild/tmp" \
   --define "_sourcedir $PWD/dist"
 ```
+
+---
+
+## Mitwirken
+
+Fehlerberichte und Pull Requests sind willkommen – siehe [CONTRIBUTING.md](CONTRIBUTING.md). Änderungen je Version stehen im [CHANGELOG.md](CHANGELOG.md), Sicherheitsmeldungen laufen über [SECURITY.md](SECURITY.md).
 
 ---
 

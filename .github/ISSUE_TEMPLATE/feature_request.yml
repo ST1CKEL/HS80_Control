@@ -1,0 +1,20 @@
+name: Funktionswunsch
+description: Eine neue Funktion oder Verbesserung vorschlagen
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Welches Problem soll gelöst werden?
+    validations:
+      required: true
+  - type: textarea
+    id: vorschlag
+    attributes:
+      label: Vorschlag
+      description: Wie könnte die Lösung aussehen (GUI, CLI, D-Bus)?
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware
+      description: Bei Wünschen zu anderen Geräten bitte `lsusb`-Zeile und Firmwarestand angeben.

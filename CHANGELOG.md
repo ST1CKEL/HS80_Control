@@ -1,0 +1,74 @@
+# Änderungsprotokoll
+
+Alle nennenswerten Änderungen an HS80 Control. Das Format folgt
+[Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionen folgen
+[Semantic Versioning](https://semver.org/lang/de/).
+
+## [0.4.0] – 2026-11-14
+
+### Neu
+- Desktop-Benachrichtigung bei niedrigem Akkustand (ab 20 %) und dringlich bei fast leerem Akku (ab 10 %); Schwellen in `config.json` unter `battery`.
+- GUI und `hs80ctl status` weisen auf einen niedrigen Akkustand hin.
+- CI prüft zusätzlich Fedora 45.
+
+### Behoben
+- Mit aktivem Linger blieb das Headset nach dem Login bis zu einer Minute offline, weil fehlender Gerätezugriff vor dem Login als nicht antwortendes Gerät gezählt wurde.
+
+## [0.3.1] – 2026-08-16
+
+### Behoben
+- Ein nicht antwortendes Gerät wird mit wachsendem Abstand statt alle zwei Sekunden angesprochen.
+
+## [0.3.0] – 2026-08-16
+
+### Neu
+- Direktbetrieb am USB-Kabel ohne Receiver: Akku, Firmware, Mikrofonstatus, Beleuchtung, Sidetone und Mikrofonverstärkung.
+
+### Behoben
+- Im Kabelbetrieb wird der Funk-Heartbeat `0x12` nicht mehr gesendet; er setzte das Gerät zurück.
+
+## [0.2.3] – 2026-08-16
+
+### Neu
+- Ein Headset am Ladekabel wird erkannt und der Zustand erklärt.
+
+## [0.2.2] – 2026-08-16
+
+### Neu
+- Aktion „Neu verbinden" in GUI und CLI.
+
+### Behoben
+- Ein fehlendes Headset wird begründet statt mit leerer Fehlermeldung angezeigt.
+- hidapi-Fehler nennen die tatsächliche Ursache.
+
+## [0.2.1] – 2026-08-15
+
+### Behoben
+- Umschaltleiste in schmalen Fenstern unter libadwaita 1.9.
+- Farbermittlung des Akkurings bei fehlenden Themenfarben.
+
+## [0.2.0] – 2026-08-15
+
+### Geändert
+- Oberfläche als native GNOME-App neu gestaltet; folgt Farbschema und Akzentfarbe des Systems.
+
+## [0.1.3] – 2026-08-15
+
+### Neu
+- Hinweis, wenn das hochgeklappte Mikrofon die Beleuchtung unterdrückt.
+
+## [0.1.2] – 2026-08-13
+
+### Behoben
+- Anwenden von RGB-Profilen in der GTK-Oberfläche.
+
+## [0.1.1] – 2026-08-13
+
+### Behoben
+- Zuordnung von HS80-Antworten und Erkennung des aktiven Headset-Endpunkts.
+
+## [0.1.0] – 2026-08-10
+
+- Erste Veröffentlichung.
+
+[0.4.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.4.0

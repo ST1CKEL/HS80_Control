@@ -9,7 +9,7 @@ RELEASE_DATE = $(shell sed -n 's/.*<release version="$(VERSION)" date="\([^"]*\)
 SOURCE_DATE_EPOCH ?= $(shell date --utc --date='$(RELEASE_DATE) 00:00:00' +%s 2>/dev/null)
 DIST_BASENAME = $(PACKAGE)-$(VERSION)
 DIST_ARCHIVE = dist/$(DIST_BASENAME).tar.gz
-DIST_INPUTS = .github LICENSE LICENSE.CC0 Makefile NOTICE README.md bin data docs packaging src tests
+DIST_INPUTS = .github CHANGELOG.md CONTRIBUTING.md LICENSE LICENSE.CC0 Makefile NOTICE README.md SECURITY.md bin data docs packaging src tests
 
 LIBDIR = $(DESTDIR)$(PREFIX)/lib/hs80-control
 BINDIR = $(DESTDIR)$(PREFIX)/bin

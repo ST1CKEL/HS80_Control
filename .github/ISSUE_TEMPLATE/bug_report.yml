@@ -1,0 +1,49 @@
+name: Fehlerbericht
+description: Etwas funktioniert nicht wie erwartet
+labels: [bug]
+body:
+  - type: textarea
+    id: beschreibung
+    attributes:
+      label: Was ist passiert?
+      description: Was hast du getan, was hast du erwartet, was ist stattdessen passiert?
+    validations:
+      required: true
+  - type: dropdown
+    id: verbindung
+    attributes:
+      label: Verbindungsmodus
+      options:
+        - Funk über Receiver (1b1c:0a6b)
+        - USB-Kabel, Headset eingeschaltet (1b1c:0a69)
+        - USB-Kabel, Headset ausgeschaltet (1b1c:0a6a)
+        - Unklar
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Ausgabe von `hs80ctl --version`
+      placeholder: hs80ctl 0.4.0
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distribution und Desktop
+      placeholder: Fedora 45, GNOME 51 (Wayland)
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Diagnose
+      description: Ausgabe von `hs80ctl doctor` und `hs80ctl status`. Seriennummern darfst du unkenntlich machen.
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Daemon-Log
+      description: Ausgabe von `journalctl --user -u hs80d.service -b --no-pager | tail -n 50`
+      render: text
