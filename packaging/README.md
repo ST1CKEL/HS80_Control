@@ -8,7 +8,13 @@
 
 ## Fedora COPR
 
-One-time setup on <https://copr.fedorainfracloud.org> (Fedora account needed):
+The project exists: <https://copr.fedorainfracloud.org/coprs/stickel/hs80-control/> (Fedora 44 and 45, package `hs80-control` built from `main` with `make_srpm`). A new release is built with:
+
+```bash
+copr-cli build-package hs80-control --name hs80-control
+```
+
+The original one-time setup on <https://copr.fedorainfracloud.org> (Fedora account needed):
 
 1. **New project** `hs80-control`, chroots: the supported Fedora releases (`fedora-44-x86_64`, `fedora-45-x86_64`, …). The package is `noarch`, so one architecture is enough.
 2. **Packages → New package → SCM**:

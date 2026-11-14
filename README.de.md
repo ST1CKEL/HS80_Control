@@ -32,6 +32,7 @@ Die Suite umfasst einen leichtgewichtigen Hintergrunddienst (`hs80d`), eine asyn
 - [Systemanforderungen](#systemanforderungen)
 - [Ressourcenverbrauch](#ressourcenverbrauch)
 - [Installation & Schnellstart](#installation--schnellstart)
+  - [Fedora: COPR-Repository (empfohlen)](#fedora-copr-repository-empfohlen)
   - [Arch Linux](#arch-linux)
   - [Benutzerinstallation (Empfohlen)](#benutzerinstallation-empfohlen)
   - [Systemweite Installation](#systemweite-installation)
@@ -238,9 +239,19 @@ Gemessen mit Version 0.9.0 über 60 Sekunden unter Fedora 45 (Python 3.15, 12 CP
 
 ## Installation & Schnellstart
 
+### Fedora: COPR-Repository (empfohlen)
+
+```bash
+sudo dnf copr enable stickel/hs80-control
+sudo dnf install hs80-control
+systemctl --user enable --now hs80d.service
+```
+
+Danach den Receiver einmal abziehen und wieder anstecken, damit die udev-Regel deinem Benutzer den Zugriff erteilt. Updates kommen anschließend mit `sudo dnf upgrade` wie bei jedem anderen Paket. Das Repository liegt unter [copr.fedorainfracloud.org/coprs/stickel/hs80-control](https://copr.fedorainfracloud.org/coprs/stickel/hs80-control/).
+
 ### Grafischer Installer für Fedora (KDE Plasma & GNOME)
 
-Am einfachsten ist der Installer aus dem [neuesten Release](https://github.com/ST1CKEL/HS80_Control/releases/latest). Er enthält das RPM-Paket und fragt Sprache, Autostart und – unter GNOME – die Erweiterung für den Infobereich ab:
+Ohne COPR geht es am einfachsten mit dem Installer aus dem [neuesten Release](https://github.com/ST1CKEL/HS80_Control/releases/latest). Er enthält das RPM-Paket und fragt Sprache, Autostart und – unter GNOME – die Erweiterung für den Infobereich ab:
 
 ```bash
 sh hs80-control-installer-*.run

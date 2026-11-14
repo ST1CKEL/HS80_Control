@@ -90,6 +90,16 @@ The app follows the system's light/dark scheme and accent colour (shown here on 
 
 ## Installation
 
+### Fedora: COPR repository (recommended)
+
+```bash
+sudo dnf copr enable stickel/hs80-control
+sudo dnf install hs80-control
+systemctl --user enable --now hs80d.service
+```
+
+Unplug the receiver and plug it back in once so the udev rule grants your user access. Updates then arrive with `sudo dnf upgrade` like any other package. The repository is at [copr.fedorainfracloud.org/coprs/stickel/hs80-control](https://copr.fedorainfracloud.org/coprs/stickel/hs80-control/).
+
 ### Fedora: graphical installer (KDE Plasma and GNOME)
 
 The easiest way is the installer from the [latest release](https://github.com/ST1CKEL/HS80_Control/releases/latest). It contains the RPM package and asks for the language, autostart and — on GNOME — the tray extension:
