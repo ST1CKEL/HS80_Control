@@ -286,16 +286,23 @@ class DeviceController:
     def _tick(self) -> None:
         now = time.monotonic()
         if self._transport is None and now >= self._next_discovery:
-            self._try_connect()
+            probed = self._try_connect()
             # A device that stops answering must not be hammered every two
             # seconds: repeated probing was observed to keep the HS80's
             # control interface wedged. Back off, but stay responsive to a
             # headset that simply came back.
-            if self._transport is None:
+            if self._transport is not None:
+                self._connect_failures = 0
+                delay = 2.0
+            elif probed:
                 self._connect_failures += 1
                 delay = min(2.0 * 2 ** min(self._connect_failures - 1, 4), 30.0)
             else:
-                self._connect_failures = 0
+                # Nothing was sent: the node is missing or not yet ours.
+                # With lingering enabled the daemon starts before the
+                # graphical login grants the hidraw ACL; backing off here
+                # left the headset "offline" for up to a minute afterwards.
+                # Looking at sysfs every two seconds costs the device nothing.
                 delay = 2.0
             self._next_discovery = time.monotonic() + delay
 
@@ -435,7 +442,9 @@ class DeviceController:
             return WIRED_HEADSET_MESSAGE
         return NO_HEADSET_MESSAGE
 
-    def _try_connect(self) -> None:
+    def _try_connect(self) -> bool:
+        """Try to open a session; return whether the device was contacted."""
+
         wired = self._refresh_wired_state()
         node = self._node_finder()
         if node is None:
@@ -449,20 +458,25 @@ class DeviceController:
                     else RECEIVER_MISSING_MESSAGE
                 ),
             )
-            return
+            return False
         self.state.update(
             receiver_serial=node.serial,
             hid_path=str(node.path),
         )
         if not node.readable or not node.writable:
-            self.state.update(
+            message = (
+                f"No access to {node.path}; log in to the desktop session, or "
+                "install 70-hs80-control.rules and reconnect the receiver"
+            )
+            changed = self.state.update(
                 receiver_connected=False,
                 headset_connected=False,
-                last_error=(
-                    f"No access to {node.path}; install 70-hs80-control.rules and reconnect the receiver"
-                ),
+                last_error=message,
             )
-            return
+            if "last_error" in changed:
+                # Logged once per occurrence, not on every two-second look.
+                LOG.info("%s", message)
+            return False
 
         try:
             transport = self._transport_factory(node, self._handle_event)
@@ -470,7 +484,7 @@ class DeviceController:
             self._node = node
             if node.product_id == USB_HEADSET_PRODUCT_ID:
                 self._connect_usb_headset(node)
-                return
+                return True
             receiver_fw = transport.transfer(RECEIVER_TARGET, CMD_FIRMWARE)
             self.state.update(
                 connection_mode="wireless",
@@ -515,7 +529,7 @@ class DeviceController:
                     ),
                 )
                 self._next_heartbeat = time.monotonic() + 2.0
-                return
+                return True
             self._headset = headset
             self._headset_software_mode = False
             self.state.update(serial=headset.serial)
@@ -529,6 +543,7 @@ class DeviceController:
         except Exception as exc:
             self._record_error(exc)
             self._disconnect(graceful=False)
+        return True
 
     def _probe_active_headset(self, transport: HidTransport) -> PairedDevice | None:
         mapping = transport.transfer(RECEIVER_TARGET, CMD_SUBDEVICE_BITFIELD)

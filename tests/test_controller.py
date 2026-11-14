@@ -734,6 +734,81 @@ class ControllerTests(unittest.TestCase):
             self.assertIsNotNone(headset)
             self.assertEqual(0x0A, headset.endpoint if headset else None)
 
+    def _backoff_node(self, accessible: bool) -> HidNode:
+        return HidNode(
+            path=Path("/dev/hidraw-test"),
+            sysfs_path=Path("/sys/test"),
+            interface=3,
+            vendor_id=0x1B1C,
+            product_id=0x0A6B,
+            serial="RECEIVER",
+            product="HS80 Receiver",
+            readable=accessible,
+            writable=accessible,
+        )
+
+    def test_waiting_for_device_access_never_backs_off(self) -> None:
+        # With lingering the daemon runs before the graphical login grants
+        # the hidraw ACL. Those looks send nothing, so they must not count
+        # as a device that stopped answering.
+        nodes = [self._backoff_node(False)]
+        opened: list[FakeTransport] = []
+
+        def factory(_node: HidNode, _callback: object) -> FakeTransport:
+            opened.append(FakeTransport())
+            return opened[-1]
+
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: nodes[0],
+                transport_factory=factory,  # type: ignore[arg-type]
+                wired_finder=lambda: None,
+            )
+            with self.assertLogs("hs80_control.controller", "INFO") as logs:
+                for _ in range(6):
+                    controller._next_discovery = 0.0
+                    controller._tick()
+                    self.assertEqual(0, controller._connect_failures)
+                    self.assertLessEqual(
+                        controller._next_discovery, time.monotonic() + 2.0
+                    )
+            self.assertEqual([], opened)
+            self.assertEqual(1, len(logs.output))
+            self.assertIn("No access to", controller.snapshot().last_error)
+
+            nodes[0] = self._backoff_node(True)
+            controller._next_discovery = 0.0
+            controller._tick()
+            self.assertTrue(controller.snapshot().headset_connected)
+            self.assertEqual("", controller.snapshot().last_error)
+            controller._disconnect(graceful=True)
+
+    def test_silent_device_is_probed_with_growing_delays(self) -> None:
+        def factory(_node: HidNode, _callback: object) -> FakeTransport:
+            raise OSError("timeout waiting for response")
+
+        with tempfile.TemporaryDirectory() as directory:
+            controller = DeviceController(
+                config=ConfigStore(Path(directory) / "config.json"),
+                mixer=FakeMixer(),  # type: ignore[arg-type]
+                spatial=FakeSpatial(),  # type: ignore[arg-type]
+                node_finder=lambda: self._backoff_node(True),
+                transport_factory=factory,  # type: ignore[arg-type]
+                wired_finder=lambda: None,
+            )
+            delays: list[float] = []
+            with self.assertLogs("hs80_control.controller", "WARNING"):
+                for _ in range(6):
+                    controller._next_discovery = 0.0
+                    controller._tick()
+                    delays.append(
+                        round(controller._next_discovery - time.monotonic())
+                    )
+            self.assertEqual([2, 4, 8, 16, 30, 30], delays)
+
     def test_mixer_failure_has_separate_state_from_hid_error(self) -> None:
         class FailingMixer(FakeMixer):
             def snapshot(self) -> MixerSnapshot:
