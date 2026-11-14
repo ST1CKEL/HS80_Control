@@ -1,5 +1,5 @@
 Name:           hs80-control
-Version:        0.8.1
+Version:        0.9.0
 Release:        1%{?dist}
 Summary:        Corsair HS80 RGB Wireless control service
 License:        GPL-3.0-or-later AND CC0-1.0
@@ -83,6 +83,9 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 %{_datadir}/icons/hicolor/scalable/apps/io.github.hs80control.App.svg
 
 %changelog
+* Sat Nov 14 2026 ST1CKEL - 0.9.0-1
+- Add spoken announcements on the headset in German and English
+- Fix the charging state staying on after the cable is pulled
 * Sat Nov 14 2026 ST1CKEL - 0.8.1-1
 - Installer: quit a running application before starting the new version
 * Sat Nov 14 2026 ST1CKEL - 0.8.0-1
