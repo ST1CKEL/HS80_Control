@@ -26,6 +26,7 @@ Die Suite umfasst einen leichtgewichtigen Hintergrunddienst (`hs80d`), eine asyn
 - [Systemarchitektur](#systemarchitektur)
 - [Hardware-Kompatibilität & Verbindungsmodi](#hardware-kompatibilität--verbindungsmodi)
 - [Systemanforderungen](#systemanforderungen)
+- [Ressourcenverbrauch](#ressourcenverbrauch)
 - [Installation & Schnellstart](#installation--schnellstart)
   - [Benutzerinstallation (Empfohlen)](#benutzerinstallation-empfohlen)
   - [Systemweite Installation](#systemweite-installation)
@@ -208,6 +209,25 @@ Für Spatial Audio (optional):
 ```bash
 sudo dnf install pipewire-module-filter-chain-sofa
 ```
+
+---
+
+## Ressourcenverbrauch
+
+Im Leerlauf belegt HS80 Control zusammen rund 0,4 % eines CPU-Kerns und etwa 140 MB Arbeitsspeicher; fast der gesamte Speicher entfällt auf das Fenster.
+
+| Prozess | CPU (ein Kern) | Speicher (PSS) | Aufwachen pro Sekunde |
+| :--- | ---: | ---: | ---: |
+| Daemon `hs80d` | 0,35 % | 26 MB | ca. 51 |
+| App-Fenster / Infobereich `hs80-control` | 0,05 % | 109 MB | ca. 5 |
+| Spatial-Prozess (PipeWire, optional) | 0,00 % | 4 MB | < 1 |
+
+Gemessen mit Version 0.9.0 über 60 Sekunden unter Fedora 45 (Python 3.15, 12 CPU-Kerne): Headset per Funk verbunden, RGB statisch, Fenster im Infobereich, keine Audiowiedergabe.
+
+- **Daemon**: Die CPU-Zeit entsteht fast nur dadurch, dass er alle 20 ms nach Meldungen des Headsets sieht.
+- **Fenster**: Der Speicher ist der Grundbedarf einer GTK4/libadwaita-Anwendung in Python und fällt auch an, wenn die App nur im Infobereich sitzt. Der Daemon arbeitet ohne Fenster.
+- **Sprachansagen**: Im Leerlauf ohne Kosten; pro Ansage läuft für etwa anderthalb Sekunden ein `pw-play`.
+- **Nicht gemessen**: Animierte RGB-Modi (Pulsieren, Regenbogen, Farbwechsel) senden laufend Farben an das Headset, und der Spatial-Prozess rechnet während der Audiowiedergabe. Beides liegt über den Leerlaufwerten.
 
 ---
 
