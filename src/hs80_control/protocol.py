@@ -38,6 +38,7 @@ CMD_HARDWARE_MODE: Final = bytes((0x01, 0x03, 0x00, 0x01))
 CMD_SLEEP_NOW: Final = bytes((0x01, 0x03, 0x00, 0x04))
 CMD_FIRMWARE: Final = bytes((0x02, 0x13))
 CMD_BATTERY: Final = bytes((0x02, 0x0F))
+CMD_CHARGING: Final = bytes((0x02, 0x10))
 CMD_MIC_STATUS: Final = bytes((0x02, 0xA6))
 CMD_HEARTBEAT: Final = bytes((0x12,))
 CMD_VENDOR_ID: Final = bytes((0x02, 0x11))
@@ -127,6 +128,19 @@ def parse_battery_percent(report: bytes) -> int:
     return min(100, tenths // 10)
 
 
+# Property 0x10. Observed on the wireless link: 1 when the cable goes in, 2
+# when it comes out. 0 and 3 (full, in other Bragi devices) were not seen;
+# neither means current is flowing into the battery.
+CHARGING_STATES: Final = (0, 1, 2, 3)
+
+
+def parse_charging(report: bytes) -> bool:
+    _require(report, 5, "charging")
+    if report[4] not in CHARGING_STATES:
+        raise ProtocolError(f"invalid charging state: {report[4]}")
+    return report[4] == 1
+
+
 def parse_microphone_muted(report: bytes) -> bool:
     _require(report, 5, "microphone")
     if report[4] not in (0, 1):
@@ -157,7 +171,7 @@ def parse_event(report: bytes) -> DeviceEvent | None:
         if tenths <= 1000:
             return DeviceEvent("battery", min(100, tenths // 10), bytes(report))
 
-    if len(report) >= 6 and report[3] == 0x10 and report[5] in (0, 1):
+    if len(report) >= 6 and report[3] == 0x10 and report[5] in CHARGING_STATES:
         return DeviceEvent("charging", report[5] == 1, bytes(report))
 
     if len(report) >= 6 and report[1] == 0x00 and report[3] == 0x36:

@@ -83,7 +83,7 @@ Byte:   00       01       02       03       04       05       06 .. 63
 | Event Type (Byte 3) | Bedeutung | Datenformat |
 | :--- | :--- | :--- |
 | `0x0F` | **Akku-Update** | Bytes 5..6: Zehntelprozent als Little-Endian `uint16` (z. B. `0x03ca` = 970 = 97.0 %) |
-| `0x10` | **Ladestatus** | Byte 5: `0x00` = Batteriebetrieb, `0x01` = Headset wird geladen |
+| `0x10` | **Ladestatus** | Byte 5: `0x01` = Headset wird geladen, `0x02` = Kabel abgezogen (Akkubetrieb). `0x00` und `0x03` wurden nicht beobachtet und gelten als „lädt nicht“. Per `02 10` am Headset-Endpunkt auch abfragbar (über den Receiver bestätigt; Wert in Byte 4). |
 | `0x36` | **Verbindungsstatus** | Byte 5: Funkkanal-Statusbitfield |
 | `0x8E` / `0xA6` | **Mikrofon-Arm-Schalter** | Byte 5: `0x00` = Arm unten (Aktiv), `0x01` = Arm oben (Stumm) |
 

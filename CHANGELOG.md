@@ -4,6 +4,11 @@ Alle nennenswerten Änderungen an HS80 Control. Das Format folgt
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionen folgen
 [Semantic Versioning](https://semver.org/lang/de/).
 
+## [Unveröffentlicht]
+
+### Behoben
+- Akkuanzeige: Nach dem Abziehen des Ladekabels blieb „lädt“ stehen. Das Headset meldet das Abziehen mit dem Statuswert 2, der bisher verworfen wurde. Zusätzlich liest der Daemon Ladestatus und Akkustand jetzt beim Verbinden und einmal pro Minute selbst aus, statt sich allein auf Ereignisse zu verlassen.
+
 ## [0.8.1] – 2026-11-14
 
 ### Behoben

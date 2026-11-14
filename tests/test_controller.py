@@ -19,6 +19,7 @@ from hs80_control.controller import (
 from hs80_control.discovery import HidNode
 from hs80_control.protocol import (
     CMD_BATTERY,
+    CMD_CHARGING,
     CMD_FIRMWARE,
     CMD_HARDWARE_MODE,
     CMD_HEARTBEAT,
@@ -652,6 +653,9 @@ class ControllerTests(unittest.TestCase):
             self.assertEqual("", state.last_error)
             # 0x12 resets the real device, so it must never be sent here.
             self.assertEqual(0, transport.heartbeats)
+            # The charging read is unconfirmed on the cable; it is implied.
+            self.assertNotIn(CMD_CHARGING, [call[1] for call in transport.calls])
+            self.assertEqual(1, state.charging)
             controller.stop()
 
     def test_usb_heartbeat_refreshes_battery_without_command_0x12(self) -> None:
@@ -892,6 +896,35 @@ class ControllerTests(unittest.TestCase):
             controller._handle_event(DeviceEvent("charging", True, b""))
             controller._write_rgb(time.monotonic())
             self.assertEqual(bytes([255] * 9), self._rgb_frames(transport)[-1][4:])
+            controller._disconnect(graceful=True)
+
+    def test_charging_is_read_from_the_headset_not_only_from_events(self) -> None:
+        class ChargingTransport(FakeTransport):
+            status = 1
+
+            def transfer(self, target, command, payload=b"", timeout_ms=1000):
+                response = bytearray(super().transfer(target, command, payload, timeout_ms))
+                if command == CMD_CHARGING:
+                    response[4] = self.status
+                return bytes(response)
+
+        transport = ChargingTransport()
+        with tempfile.TemporaryDirectory() as directory:
+            controller = self._connected_controller(directory, transport)
+            # Known right after connecting, before any event arrives.
+            self.assertEqual(1, controller.snapshot().charging)
+
+            # The cable is pulled and the event for it never arrives.
+            transport.status = 2
+            controller._heartbeat()
+            self.assertEqual(1, controller.snapshot().charging)
+            controller._next_battery_poll = 0.0
+            controller._heartbeat()
+            self.assertEqual(0, controller.snapshot().charging)
+
+            transport.status = 1
+            controller._refresh_all()
+            self.assertEqual(1, controller.snapshot().charging)
             controller._disconnect(graceful=True)
 
     def test_battery_warning_switch_is_on_by_default_and_persisted(self) -> None:

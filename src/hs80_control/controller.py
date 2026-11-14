@@ -17,6 +17,7 @@ from .effects import ANIMATED_MODES, frame_interval, render_frame
 from .hidapi import HidApi
 from .protocol import (
     CMD_BATTERY,
+    CMD_CHARGING,
     CMD_FIRMWARE,
     CMD_GET_DEVICES,
     CMD_HARDWARE_MODE,
@@ -42,6 +43,7 @@ from .protocol import (
     encode_rgb_payload,
     encode_sleep_duration,
     parse_battery_percent,
+    parse_charging,
     parse_device_identifier,
     parse_headset_firmware,
     parse_microphone_muted,
@@ -55,6 +57,8 @@ from .transport import DeviceStatusError, HidTransport
 
 
 LOG = logging.getLogger(__name__)
+
+BATTERY_POLL_SECONDS = 60.0
 
 # A healthy receiver that reports an empty subdevice bitfield is the normal
 # picture for a headset that is switched off. Saying so beats leaving the
@@ -152,6 +156,7 @@ class DeviceController:
         self._connect_failures = 0
         self._next_discovery = 0.0
         self._next_heartbeat = 0.0
+        self._next_battery_poll = 0.0
         self._next_animation = 0.0
         self._rgb_dirty = False
         # Last frame the headset acknowledged; identical frames are not sent.
@@ -618,11 +623,14 @@ class DeviceController:
             self._headset_software_mode = True
             battery = transport.transfer(headset.endpoint, CMD_BATTERY)
             microphone = transport.transfer(headset.endpoint, CMD_MIC_STATUS)
+            charging = self._read_charging(transport, headset)
             self._open_rgb_endpoint(transport, headset.endpoint)
+            self._next_battery_poll = time.monotonic() + BATTERY_POLL_SECONDS
             self.state.update(
                 headset_connected=True,
                 firmware=parse_headset_firmware(firmware),
                 battery_percent=parse_battery_percent(battery),
+                charging=charging,
                 microphone_muted=int(parse_microphone_muted(microphone)),
                 last_error="",
             )
@@ -649,6 +657,13 @@ class DeviceController:
                 else:
                     self._headset_software_mode = False
             raise
+
+    def _read_charging(self, transport: HidTransport, headset: PairedDevice) -> int:
+        # The property read is only confirmed over the receiver. On its own
+        # cable the headset is charging by definition, so nothing is asked.
+        if self._is_usb_mode():
+            return 1
+        return int(parse_charging(transport.transfer(headset.endpoint, CMD_CHARGING)))
 
     def _usb_heartbeat(self) -> None:
         # No 0x12 in this mode. Reading the battery keeps the session honest
@@ -701,6 +716,15 @@ class DeviceController:
             self._transport.transfer(self._headset.endpoint, CMD_HEARTBEAT)
             if not self.state.snapshot().headset_connected:
                 self._initialize_headset()
+            elif time.monotonic() >= self._next_battery_poll:
+                # Battery and charging normally arrive as events, but one
+                # lost on the radio would otherwise stay wrong for hours.
+                self._next_battery_poll = time.monotonic() + BATTERY_POLL_SECONDS
+                battery = self._transport.transfer(self._headset.endpoint, CMD_BATTERY)
+                self._battery_state_update(
+                    battery_percent=parse_battery_percent(battery),
+                    charging=self._read_charging(self._transport, self._headset),
+                )
         except DeviceStatusError as exc:
             self._rgb_endpoint_open = False
             self._headset_software_mode = False
@@ -724,6 +748,7 @@ class DeviceController:
                 microphone = self._transport.transfer(self._headset.endpoint, CMD_MIC_STATUS)
                 self._battery_state_update(
                     battery_percent=parse_battery_percent(battery),
+                    charging=self._read_charging(self._transport, self._headset),
                     microphone_muted=int(parse_microphone_muted(microphone)),
                     last_error="",
                 )

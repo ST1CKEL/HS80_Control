@@ -10,6 +10,7 @@ from hs80_control.protocol import (
     encode_rgb_payload,
     encode_sleep_duration,
     parse_battery_percent,
+    parse_charging,
     parse_color,
     parse_device_identifier,
     parse_event,
@@ -59,6 +60,16 @@ class ProtocolTests(unittest.TestCase):
             ("microphone", True),
             (parse_event(microphone).kind, parse_event(microphone).value),
         )
+        # Pulling the cable is announced as 2, not 0.
+        unplugged = bytes((EVENT_REPORT_ID, 1, 1, 0x10, 0, 2))
+        self.assertEqual(
+            ("charging", False),
+            (parse_event(unplugged).kind, parse_event(unplugged).value),
+        )
+        self.assertTrue(parse_charging(bytes((1, 1, 2, 0, 1))))
+        self.assertFalse(parse_charging(bytes((1, 1, 2, 0, 2))))
+        with self.assertRaisesRegex(ProtocolError, "invalid charging state"):
+            parse_charging(bytes((1, 1, 2, 0, 9)))
         self.assertIsNone(parse_event(bytes((1, 2, 3, 4))))
 
     def test_typed_device_list(self) -> None:
