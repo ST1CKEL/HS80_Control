@@ -1,0 +1,14 @@
+post_install() {
+  cat <<'MSG'
+==> HS80 Control: unplug the receiver and plug it back in so the new udev
+    rule grants your user access, then start the service once:
+      systemctl --user enable --now hs80d.service
+MSG
+}
+
+post_upgrade() {
+  cat <<'MSG'
+==> HS80 Control: restart the service to load the new version:
+      systemctl --user restart hs80d.service
+MSG
+}

@@ -1,0 +1,27 @@
+pkgbase = hs80-control
+	pkgdesc = Native control app for the Corsair HS80 RGB Wireless headset: battery, RGB, sidetone, microphone, voice announcements and binaural 7.1
+	pkgver = 0.9.0
+	pkgrel = 1
+	url = https://github.com/ST1CKEL/HS80_Control
+	install = hs80-control.install
+	arch = any
+	license = GPL-3.0-or-later
+	license = CC0-1.0
+	depends = python>=3.11
+	depends = python-dbus-next
+	depends = python-gobject
+	depends = gtk4
+	depends = libadwaita>=1.7
+	depends = hidapi
+	depends = alsa-utils
+	depends = pipewire
+	depends = wireplumber
+	depends = systemd
+	optdepends = pipewire-audio: binaural 7.1 spatial audio (SOFA filter plugin)
+	optdepends = easyeffects: noise suppression and dynamics for the microphone
+	optdepends = gnome-shell-extension-appindicator: tray icon on GNOME
+	backup = etc/xdg/autostart/io.github.hs80control.App.desktop
+	source = https://github.com/ST1CKEL/HS80_Control/releases/download/v0.9.0/hs80-control-0.9.0.tar.gz
+	sha256sums = aec006d2fa29208757266ef16aea04a5c52f98a1b55cf3ecd19d558b89f49050
+
+pkgname = hs80-control

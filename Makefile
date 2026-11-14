@@ -11,7 +11,7 @@ DIST_BASENAME = $(PACKAGE)-$(VERSION)
 DIST_ARCHIVE = dist/$(DIST_BASENAME).tar.gz
 RPM_TOPDIR = $(CURDIR)/build/rpmbuild
 INSTALLER = dist/$(PACKAGE)-installer-$(VERSION).run
-DIST_INPUTS = .github CHANGELOG.md CONTRIBUTING.md LICENSE LICENSE.CC0 Makefile NOTICE README.md SECURITY.md bin data docs installer packaging src tests tools
+DIST_INPUTS = .github CHANGELOG.md CONTRIBUTING.md LICENSE LICENSE.CC0 Makefile NOTICE README.md README.de.md SECURITY.md bin data docs installer packaging src tests tools
 
 LIBDIR = $(DESTDIR)$(PREFIX)/lib/hs80-control
 BINDIR = $(DESTDIR)$(PREFIX)/bin
