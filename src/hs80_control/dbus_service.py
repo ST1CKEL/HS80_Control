@@ -26,6 +26,7 @@ _STATE_TO_DBUS = {
     "receiver_firmware": "ReceiverFirmware",
     "firmware": "Firmware",
     "battery_percent": "BatteryPercent",
+    "battery_notify": "BatteryNotify",
     "charging": "Charging",
     "microphone_muted": "MicrophoneMuted",
     "hid_path": "HidPath",
@@ -139,6 +140,10 @@ class HS80Service(ServiceInterface):
     @dbus_property(access=PropertyAccess.READ)
     def BatteryPercent(self) -> "i":
         return self.controller.snapshot().battery_percent
+
+    @dbus_property(access=PropertyAccess.READ)
+    def BatteryNotify(self) -> "b":
+        return self.controller.snapshot().battery_notify
 
     @dbus_property(access=PropertyAccess.READ)
     def Charging(self) -> "i":
@@ -279,6 +284,10 @@ class HS80Service(ServiceInterface):
     @method()
     async def SetSleepTimer(self, minutes: "q") -> "b":
         return bool(await self._call(self.controller.set_sleep_timer, minutes))
+
+    @method()
+    async def SetBatteryNotify(self, enabled: "b") -> "b":
+        return bool(await self._call(self.controller.set_battery_notify, enabled))
 
     @method()
     async def SetSidetone(self, enabled: "b", level_db: "d") -> "b":

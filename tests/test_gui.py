@@ -84,6 +84,12 @@ class GuiPresentationTests(unittest.TestCase):
             self.gui._battery_presentation(97, 1, connected=False),
         )
 
+    def test_battery_warning_switch_names_the_thresholds(self) -> None:
+        self.assertEqual(
+            "Desktop-Benachrichtigung ab 20 %, dringlich ab 10 %",
+            self.gui._battery_warning_subtitle(20, 10),
+        )
+
     def test_low_battery_is_called_out_unless_charging(self) -> None:
         self.assertEqual(
             ("20 %", "20 Prozent · niedrig, bitte laden"),

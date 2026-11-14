@@ -204,6 +204,14 @@ class ConfigStore:
             self._save_locked(validated)
             self._data = validated
 
+    def update_battery(self, *, notify: bool) -> None:
+        with self._lock:
+            candidate = deepcopy(self._data)
+            candidate["battery"]["notify"] = notify
+            validated = validate_config(candidate)
+            self._save_locked(validated)
+            self._data = validated
+
     def update_spatial(
         self,
         *,

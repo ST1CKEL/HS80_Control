@@ -83,16 +83,15 @@ async def run_daemon() -> int:
 
         if stopped.is_set():
             return 0
+        # Always present: the switch in the state decides at runtime, so
+        # turning the warning on needs no daemon restart.
         battery = controller.config.snapshot()["battery"]
-        if battery["notify"]:
-            notifier = BatteryNotifier(
-                bus,
-                controller.state,
-                loop,
-                LowBatteryMonitor(
-                    battery["low_percent"], battery["critical_percent"]
-                ),
-            )
+        notifier = BatteryNotifier(
+            bus,
+            controller.state,
+            loop,
+            LowBatteryMonitor(battery["low_percent"], battery["critical_percent"]),
+        )
         controller.start()
         controller_started = True
         LOG.info("hs80d %s is ready", __version__)

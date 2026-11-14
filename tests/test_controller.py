@@ -809,6 +809,29 @@ class ControllerTests(unittest.TestCase):
                     )
             self.assertEqual([2, 4, 8, 16, 30, 30], delays)
 
+    def test_battery_warning_switch_is_on_by_default_and_persisted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+
+            def build() -> DeviceController:
+                return DeviceController(
+                    config=ConfigStore(path),
+                    mixer=FakeMixer(),  # type: ignore[arg-type]
+                    spatial=FakeSpatial(),  # type: ignore[arg-type]
+                    node_finder=lambda: None,
+                    wired_finder=lambda: None,
+                )
+
+            controller = build()
+            self.assertTrue(controller.snapshot().battery_notify)
+            self.assertTrue(controller.set_battery_notify(False))
+            self.assertFalse(controller.snapshot().battery_notify)
+            # A restarted daemon must come up with the saved choice.
+            self.assertFalse(build().snapshot().battery_notify)
+            self.assertEqual(
+                20, ConfigStore(path).snapshot()["battery"]["low_percent"]
+            )
+
     def test_mixer_failure_has_separate_state_from_hid_error(self) -> None:
         class FailingMixer(FakeMixer):
             def snapshot(self) -> MixerSnapshot:

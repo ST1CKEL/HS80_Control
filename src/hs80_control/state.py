@@ -17,6 +17,8 @@ class DeviceState:
     receiver_firmware: str = ""
     firmware: str = ""
     battery_percent: int = -1
+    # Whether the daemon announces a low battery as a desktop notification.
+    battery_notify: bool = True
     charging: int = -1
     microphone_muted: int = -1
     hid_path: str = ""

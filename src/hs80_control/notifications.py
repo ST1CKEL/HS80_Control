@@ -23,7 +23,13 @@ BatteryLevel = Literal["low", "critical"]
 
 _RANK: dict[BatteryLevel, int] = {"low": 1, "critical": 2}
 _WATCHED = frozenset(
-    {"battery_percent", "charging", "headset_connected", "connection_mode"}
+    {
+        "battery_percent",
+        "battery_notify",
+        "charging",
+        "headset_connected",
+        "connection_mode",
+    }
 )
 
 NOTIFICATIONS_NAME = "org.freedesktop.Notifications"
@@ -80,6 +86,11 @@ class LowBatteryMonitor:
             return None
         self._last_sent[level] = now
         return level
+
+    def reset(self) -> None:
+        """Re-arm every level, e.g. while the warning is switched off."""
+
+        self._announced = 0
 
     def delivery_failed(self, level: BatteryLevel) -> None:
         """Forget an announcement nobody saw so the next reading retries."""
@@ -144,6 +155,10 @@ class BatteryNotifier:
 
     async def check(self) -> None:
         snapshot: DeviceState = self._state.snapshot()
+        if not snapshot.battery_notify:
+            # Switching the warning back on at a low level should speak up.
+            self._monitor.reset()
+            return
         # On its own cable the headset is charging by definition, even when
         # no charging event has been seen yet.
         charging = snapshot.charging == 1 or snapshot.connection_mode == "usb"

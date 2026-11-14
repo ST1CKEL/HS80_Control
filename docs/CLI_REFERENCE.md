@@ -123,6 +123,14 @@ hs80ctl rgb rainbow --brightness 100
 
 ---
 
+### `battery-warning`
+
+Schaltet die Desktop-Benachrichtigung bei niedrigem Akkustand ein oder aus (Standard: an, Warnung ab 20 %, dringlich ab 10 %). Die Einstellung wirkt sofort und bleibt gespeichert.
+
+```bash
+hs80ctl battery-warning <on | off>
+```
+
 ### `sleep`
 Stellt die Zeitspanne ein, nach der sich das Headset bei Nichtbenutzung automatisch abschaltet.
 

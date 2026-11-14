@@ -45,7 +45,7 @@ Die Suite umfasst einen leichtgewichtigen Hintergrunddienst (`hs80d`), eine asyn
 ## Funktionsübersicht
 
 - 🔋 **Echtzeit-Akkumonitoring**: Exakte prozentuale Ladestandsabfrage und dynamische Ladeanzeige über Hardware-Events und Heartbeats.
-- 🪫 **Warnung bei niedrigem Akkustand**: Desktop-Benachrichtigung des Daemons ab 20 % und dringlich ab 10 % – auch wenn das Fenster geschlossen ist. Schwellen in `config.json` unter `battery` einstellbar.
+- 🪫 **Warnung bei niedrigem Akkustand**: Desktop-Benachrichtigung des Daemons ab 20 % und dringlich ab 10 % – auch wenn das Fenster geschlossen ist. Standardmäßig aktiv, per Schalter in der Übersicht oder `hs80ctl battery-warning on|off` abschaltbar; Schwellen in `config.json` unter `battery`.
 - 💡 **Umfassende RGB-Steuerung**: 4 Modi (*Aus*, *Statisch*, *Pulsieren*, *Regenbogen*) mit feinstufiger Helligkeitsregelung und getrennt ansteuerbaren Farbzonen (*Logo*, *Statusanzeige*, *Mikrofon-LED*).
 - ⏱️ **Einstellbarer Sleep-Timer**: Automatische Abschaltung bei Inaktivität nach 0 bis 90 Minuten.
 - 🎙️ **Hardware-Sidetone (Zero-Latency Mic Monitoring)**: Direktes, latenzfreies Mithören des eigenen Mikrofons über ALSA im Bereich von `-42 dB` bis `+4 dB`.
@@ -281,6 +281,7 @@ Aufruf: hs80ctl [--json] <Befehl> [Optionen]
 | `refresh` | — | Erzwingt eine Aktualisierung von Akku-, Mikrofon- und ALSA-Mixer-Werten. |
 | `doctor` | — | Überprüft lokale Systemvoraussetzungen (USB, hidraw, ALSA, PipeWire, SOFA). |
 | `rgb` | `<modus> [Optionen]` | Setzt RGB-Modus (`off`, `static`, `pulse`, `rainbow`), Helligkeit und Zonenfarben. |
+| `battery-warning` | `<on\|off>` | Schaltet die Desktop-Benachrichtigung bei niedrigem Akkustand. |
 | `sleep` | `<0..90>` | Konfiguriert den automatischen Abschalttimer in Minuten (`0` = deaktiviert). |
 | `sidetone` | `<on\|off> [--db -42..4]` | Schaltet Hardware-Monitoring ein/aus und setzt den Pegel in dB. |
 | `mic-gain` | `<-36..0>` | Stellt die Hardware-Mikrofonverstärkung in dB ein. |
@@ -441,6 +442,7 @@ SetMicrophoneMuted(muted: bool) -> bool
 ConfigureSpatial(sofa_file: str) -> bool
 SetSpatialEnabled(enabled: bool) -> bool
 SetSpatialMakeDefault(enabled: bool) -> bool
+SetBatteryNotify(enabled: bool) -> bool
 ```
 
 ### Beispiel: Steuerung per Python

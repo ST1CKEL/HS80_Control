@@ -81,6 +81,13 @@ def _battery_presentation(
     return f"{percent} %", detail
 
 
+def _battery_warning_subtitle(low_percent: int, critical_percent: int) -> str:
+    return (
+        f"Desktop-Benachrichtigung ab {low_percent} %, "
+        f"dringlich ab {critical_percent} %"
+    )
+
+
 def _microphone_presentation(muted: int) -> tuple[str, str]:
     if muted == 1:
         return "Stummgeschaltet", "Arm hochgeklappt"
@@ -178,9 +185,10 @@ class HS80Window(Adw.ApplicationWindow):
         self.set_default_size(960, 700)
         self.set_size_request(420, 540)
         self.config = ConfigStore()
-        self.low_battery_percent = int(
-            self.config.snapshot()["battery"]["low_percent"]
-        )
+        battery_settings = self.config.snapshot()["battery"]
+        self._battery_settings = battery_settings
+        self.low_battery_percent = int(battery_settings["low_percent"])
+        self.critical_battery_percent = int(battery_settings["critical_percent"])
         self.proxy: Gio.DBusProxy | None = None
         self._syncing = False
         self._lighting_dirty: set[str] = set()
@@ -189,7 +197,10 @@ class HS80Window(Adw.ApplicationWindow):
         self._microphone_apply_pending = False
 
         provider = Gtk.CssProvider()
-        provider.load_from_data(_CSS)
+        if hasattr(provider, "load_from_string"):
+            provider.load_from_string(_CSS.decode("utf-8"))
+        else:  # GTK older than 4.12
+            provider.load_from_data(_CSS)
         Gtk.StyleContext.add_provider_for_display(
             self.get_display(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
@@ -423,6 +434,25 @@ class HS80Window(Adw.ApplicationWindow):
         )
         status.append(receiver_card)
         content.append(status)
+
+        content.append(self._section_title("Benachrichtigungen"))
+        notifications = Gtk.ListBox()
+        notifications.add_css_class("boxed-list")
+        notifications.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.battery_notify_switch = Adw.SwitchRow(
+            title="Warnung bei niedrigem Akkustand",
+            subtitle=_battery_warning_subtitle(
+                self.low_battery_percent, self.critical_battery_percent
+            ),
+        )
+        self.battery_notify_switch.set_active(
+            bool(self._battery_settings["notify"])
+        )
+        self.battery_notify_switch.connect(
+            "notify::active", self._battery_notify_toggled
+        )
+        notifications.append(self.battery_notify_switch)
+        content.append(notifications)
 
         content.append(self._section_title("Schnellaktionen"))
         self.quick_action = Gtk.ListBox()
@@ -687,6 +717,7 @@ class HS80Window(Adw.ApplicationWindow):
                 "Spatial: Status ohne Steuerdienst nicht verfügbar"
             )
             self.spatial_error_banner.set_revealed(True)
+            self.battery_notify_switch.set_sensitive(False)
             self._set_microphone_controls_sensitive(False)
 
     def _property(self, name: str, default: object) -> object:
@@ -791,6 +822,10 @@ class HS80Window(Adw.ApplicationWindow):
         self.spatial_error_banner.set_revealed(bool(spatial_error))
 
         self._syncing = True
+        self.battery_notify_switch.set_active(
+            bool(self._property("BatteryNotify", True))
+        )
+        self.battery_notify_switch.set_sensitive(self.proxy is not None)
         self.spatial_switch.set_active(bool(self._property("SpatialEnabled", False)))
         self.spatial_default_switch.set_active(
             bool(self._property("SpatialMakeDefault", True))
@@ -1084,6 +1119,19 @@ class HS80Window(Adw.ApplicationWindow):
             "SetSpatialEnabled",
             GLib.Variant("(b)", (row.get_active(),)),
             timeout_ms=SPATIAL_DBUS_CALL_TIMEOUT_MS,
+        )
+
+    def _battery_notify_toggled(
+        self, row: Adw.SwitchRow, _property: object
+    ) -> None:
+        if self._syncing:
+            return
+        self._call(
+            "SetBatteryNotify",
+            GLib.Variant("(b)", (row.get_active(),)),
+            show_result=False,
+            # On failure the switch falls back to what the daemon reports.
+            always=self._sync_state,
         )
 
     def _spatial_default_toggled(

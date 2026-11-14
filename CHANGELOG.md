@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an HS80 Control. Das Format folgt
 [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), die Versionen folgen
 [Semantic Versioning](https://semver.org/lang/de/).
 
+## [0.5.0] – 2026-11-14
+
+### Neu
+- Schalter „Warnung bei niedrigem Akkustand" in der Übersicht; wirkt sofort, ohne Neustart des Daemons.
+- `hs80ctl battery-warning on|off`, D-Bus-Eigenschaft `BatteryNotify` und Methode `SetBatteryNotify`.
+
+Die Warnung ist standardmäßig aktiv, mit den Schwellen 20 % (niedrig) und 10 % (dringlich).
+
 ## [0.4.0] – 2026-11-14
 
 ### Neu
@@ -71,4 +79,5 @@ Alle nennenswerten Änderungen an HS80 Control. Das Format folgt
 
 - Erste Veröffentlichung.
 
+[0.5.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.5.0
 [0.4.0]: https://github.com/ST1CKEL/HS80_Control/releases/tag/v0.4.0

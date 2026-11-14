@@ -1,5 +1,5 @@
 Name:           hs80-control
-Version:        0.4.0
+Version:        0.5.0
 Release:        1%{?dist}
 Summary:        Corsair HS80 RGB Wireless control service
 License:        GPL-3.0-or-later AND CC0-1.0
@@ -65,7 +65,7 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 
 %files
 %license LICENSE LICENSE.CC0
-%doc NOTICE README.md docs/ARCHITECTURE.md docs/CLI_REFERENCE.md docs/PROTOCOL.md docs/SPATIAL_AUDIO.md
+%doc CHANGELOG.md NOTICE README.md docs/ARCHITECTURE.md docs/CLI_REFERENCE.md docs/PROTOCOL.md docs/SPATIAL_AUDIO.md
 %{_bindir}/hs80-control
 %{_bindir}/hs80ctl
 %{_libexecdir}/hs80d
@@ -79,6 +79,8 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 %{_datadir}/icons/hicolor/scalable/apps/io.github.hs80control.App.svg
 
 %changelog
+* Sat Nov 14 2026 ST1CKEL - 0.5.0-1
+- Add a switch for the low-battery warning to the app, hs80ctl and D-Bus
 * Sat Nov 14 2026 ST1CKEL - 0.4.0-1
 - Warn with a desktop notification when the headset battery runs low
 - Connect right after login when the daemon was started early by lingering

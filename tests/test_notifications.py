@@ -161,6 +161,21 @@ class BatteryNotifierTests(unittest.IsolatedAsyncioTestCase):
         await self.settle(notifier)
         self.assertEqual(2, len(bus.messages))
 
+    async def test_switch_silences_and_rearms_the_warning(self) -> None:
+        bus = FakeBus()
+        state = StateStore()
+        notifier = BatteryNotifier(bus, state, asyncio.get_running_loop())
+        state.update(battery_notify=False)
+        state.update(headset_connected=True, battery_percent=15)
+        await self.settle(notifier)
+        self.assertEqual([], bus.messages)
+
+        # Switching it on at an already low level speaks up immediately.
+        state.update(battery_notify=True)
+        await self.settle(notifier)
+        self.assertEqual(1, len(bus.messages))
+        self.assertEqual("HS80: Akku niedrig", bus.messages[0].body[3])
+
     async def test_closed_notifier_stays_silent(self) -> None:
         bus = FakeBus()
         state = StateStore()

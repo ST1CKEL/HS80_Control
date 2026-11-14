@@ -124,6 +124,7 @@ class DeviceController:
             rgb_indicator=settings["rgb"]["indicator"],
             rgb_microphone=settings["rgb"]["microphone"],
             sleep_minutes=settings["sleep"]["minutes"],
+            battery_notify=settings["battery"]["notify"],
             # Persisted intent is not proof that the user service is running.
             spatial_enabled=False,
             spatial_make_default=settings["spatial"]["make_default"],
@@ -263,6 +264,12 @@ class DeviceController:
         with self._spatial_lock:
             self.config.update_spatial(make_default=enabled)
             self.state.update(spatial_make_default=enabled)
+        return True
+
+    def set_battery_notify(self, enabled: bool) -> bool:
+        # Pure settings change: no device I/O, so no trip through the worker.
+        self.config.update_battery(notify=enabled)
+        self.state.update(battery_notify=enabled)
         return True
 
     def _run(self) -> None:

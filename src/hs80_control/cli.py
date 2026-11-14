@@ -48,6 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
     rgb.add_argument("--indicator", metavar="#RRGGBB")
     rgb.add_argument("--microphone", metavar="#RRGGBB")
 
+    battery_warning = subparsers.add_parser(
+        "battery-warning", help="switch the low-battery desktop notification"
+    )
+    battery_warning.add_argument("state", choices=("on", "off"))
+
     sleep = subparsers.add_parser("sleep", help="set automatic power-off timer")
     sleep.add_argument("minutes", type=int, choices=range(0, 91), metavar="0..90")
 
@@ -153,6 +158,7 @@ def _print_status(status: dict[str, object], as_json: bool) -> None:
         f"Akku: {f'{battery} %' if battery >= 0 else 'unbekannt'}"
         f"{' (niedrig, bitte laden)' if low else ''}"
     )
+    print(f"Akkuwarnung: {'an' if status.get('BatteryNotify', True) else 'aus'}")
     print(f"Laden: {('ja' if charging else 'nein') if charging >= 0 else 'unbekannt'}")
     print(f"Mikrofonarm: {('stumm' if microphone else 'aktiv') if microphone >= 0 else 'unbekannt'}")
     print(f"Firmware: {status.get('Firmware') or 'unbekannt'}")
@@ -200,6 +206,10 @@ async def run(arguments: argparse.Namespace) -> int:
                     arguments.indicator or "",
                     arguments.microphone or "",
                 )
+            )
+        elif command == "battery-warning":
+            applied = await _dbus_call(
+                interface.call_set_battery_notify(arguments.state == "on")
             )
         elif command == "sleep":
             applied = await _dbus_call(
