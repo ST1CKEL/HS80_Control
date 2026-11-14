@@ -84,7 +84,7 @@ udevadm control --reload-rules >/dev/null 2>&1 || :
 
 %changelog
 * Sat Nov 14 2026 ST1CKEL - 0.7.1-1
-- Name Stickelbroeck Labs as the developer in the About dialog and metadata
+- Name Stickelbroeck Labs as the developer, with logo and website, in the About dialog
 * Sat Nov 14 2026 ST1CKEL - 0.7.0-1
 - Add the colour-cycle mode, adjustable tempo and lighting profiles
 - Make the mute indicator switchable with a free colour

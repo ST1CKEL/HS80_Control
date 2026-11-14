@@ -76,6 +76,7 @@ FORCE:
 install: check-prefix
 	$(INSTALL) -d "$(LIBDIR)/hs80_control" "$(BINDIR)" "$(LIBEXECDIR)"
 	$(INSTALL) -m 0644 src/hs80_control/*.py "$(LIBDIR)/hs80_control/"
+	$(INSTALL) -D -m 0644 src/hs80_control/assets/stickelbroeck-labs.png "$(LIBDIR)/hs80_control/assets/stickelbroeck-labs.png"
 	$(INSTALL) -m 0755 bin/hs80-control bin/hs80ctl "$(BINDIR)/"
 	$(INSTALL) -m 0755 bin/hs80d "$(LIBEXECDIR)/hs80d"
 	$(INSTALL) -D -m 0644 data/udev/70-hs80-control.rules "$(DESTDIR)$(PREFIX)/lib/udev/rules.d/70-hs80-control.rules"
@@ -90,6 +91,7 @@ install: check-prefix
 install-user: check-home
 	$(INSTALL) -d "$(HOME)/.local/lib/hs80-control/hs80_control" "$(HOME)/.local/bin" "$(HOME)/.local/libexec"
 	$(INSTALL) -m 0644 src/hs80_control/*.py "$(HOME)/.local/lib/hs80-control/hs80_control/"
+	$(INSTALL) -D -m 0644 src/hs80_control/assets/stickelbroeck-labs.png "$(HOME)/.local/lib/hs80-control/hs80_control/assets/stickelbroeck-labs.png"
 	$(INSTALL) -m 0755 bin/hs80-control bin/hs80ctl "$(HOME)/.local/bin/"
 	$(INSTALL) -m 0755 bin/hs80d "$(HOME)/.local/libexec/hs80d"
 	$(INSTALL) -D -m 0644 data/systemd/hs80d-user-local.service "$(HOME)/.config/systemd/user/hs80d.service"

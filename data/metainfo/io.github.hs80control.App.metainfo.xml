@@ -39,7 +39,7 @@
   <releases>
     <release version="0.7.1" date="2026-11-14">
       <description>
-        <p>The About dialog names Stickelbroeck Labs as the developer.</p>
+        <p>The About dialog names Stickelbroeck Labs as the developer, with logo and website.</p>
       </description>
     </release>
     <release version="0.7.0" date="2026-11-14">

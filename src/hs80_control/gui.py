@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import math
+from pathlib import Path
 import sys
 
 import gi
@@ -27,6 +28,9 @@ from .dbus_service import BUS_NAME, INTERFACE_NAME, OBJECT_PATH
 APP_ID = "io.github.hs80control.App"
 DEVELOPER_NAME = "Stickelbroeck Labs"
 DEVELOPER_URL = "https://stickelbroeck.com/"
+DEVELOPER_DOMAIN = "stickelbroeck.com"
+DEVELOPER_LOGO = Path(__file__).resolve().parent / "assets" / "stickelbroeck-labs.png"
+PROJECT_URL = "https://github.com/ST1CKEL/HS80_Control"
 DBUS_CALL_TIMEOUT_MS = 30_000
 SPATIAL_DBUS_CALL_TIMEOUT_MS = 60_000
 TRAY_WAIT_SECONDS = 20
@@ -310,23 +314,96 @@ class HS80Window(Adw.ApplicationWindow):
         self.add_breakpoint(narrow)
 
     def _show_about(self, *_args: object) -> None:
-        dialog = Adw.AboutDialog(
-            application_name="HS80 Control",
-            application_icon=APP_ID,
-            version=__version__,
-            developer_name=DEVELOPER_NAME,
-            copyright=f"© 2026 {DEVELOPER_NAME}",
-            website="https://github.com/ST1CKEL/HS80_Control",
-            issue_url="https://github.com/ST1CKEL/HS80_Control/issues",
-            comments=(
+        # Built by hand rather than with Adw.AboutDialog, which has no place
+        # for the developer's logo.
+        dialog = Adw.Dialog(title="Über HS80 Control", content_width=440)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        box.set_margin_top(6)
+        box.set_margin_bottom(24)
+        box.set_margin_start(18)
+        box.set_margin_end(18)
+
+        icon = Gtk.Image(icon_name=APP_ID, pixel_size=96)
+        icon.set_margin_bottom(6)
+        box.append(icon)
+        name = Gtk.Label(label="HS80 Control")
+        name.add_css_class("title-1")
+        box.append(name)
+        version = Gtk.Label(label=f"Version {__version__}", selectable=True)
+        version.add_css_class("dim-label")
+        box.append(version)
+        comments = Gtk.Label(
+            label=(
                 "Linux-Steuerung für das hardwaregetestete Corsair HS80 RGB "
-                "Wireless mit Receiver 1b1c:0a6b und Headset-PID 0a69.\n\n"
-                f"Entwickelt von {DEVELOPER_NAME}."
+                "Wireless mit Receiver 1b1c:0a6b und Headset-PID 0a69."
             ),
-            license_type=Gtk.License.GPL_3_0,
+            wrap=True,
+            justify=Gtk.Justification.CENTER,
         )
-        dialog.add_link(DEVELOPER_NAME, DEVELOPER_URL)
+        comments.set_margin_top(12)
+        comments.set_margin_bottom(12)
+        box.append(comments)
+
+        developer = Adw.PreferencesGroup(title="Entwickelt von")
+        row = self._link_row(DEVELOPER_NAME, DEVELOPER_DOMAIN, DEVELOPER_URL)
+        if DEVELOPER_LOGO.is_file():
+            logo = Gtk.Picture.new_for_filename(str(DEVELOPER_LOGO))
+            logo.set_size_request(56, 56)
+            logo.set_can_shrink(True)
+            logo.set_valign(Gtk.Align.CENTER)
+            logo.set_margin_top(8)
+            logo.set_margin_bottom(8)
+            logo.set_alternative_text(f"Logo von {DEVELOPER_NAME}")
+            row.add_prefix(logo)
+        developer.add(row)
+        box.append(developer)
+
+        project = Adw.PreferencesGroup(title="Projekt")
+        project.set_margin_top(12)
+        project.add(self._link_row("Quellcode", "github.com/ST1CKEL/HS80_Control", PROJECT_URL))
+        project.add(self._link_row("Fehler melden", "GitHub Issues", f"{PROJECT_URL}/issues"))
+        project.add(
+            self._link_row(
+                "Lizenz",
+                "GNU General Public License 3.0 oder neuer",
+                "https://www.gnu.org/licenses/gpl-3.0.html",
+            )
+        )
+        box.append(project)
+
+        legal = Gtk.Label(
+            label=(
+                f"© 2026 {DEVELOPER_NAME}\n"
+                "Dieses Programm wird ohne jegliche Gewährleistung bereitgestellt."
+            ),
+            wrap=True,
+            justify=Gtk.Justification.CENTER,
+        )
+        legal.add_css_class("caption")
+        legal.add_css_class("dim-label")
+        legal.set_margin_top(18)
+        box.append(legal)
+
+        scrolled = Gtk.ScrolledWindow(
+            hscrollbar_policy=Gtk.PolicyType.NEVER,
+            propagate_natural_height=True,
+            child=Adw.Clamp(child=box, maximum_size=440),
+        )
+        toolbar = Adw.ToolbarView(content=scrolled)
+        toolbar.add_top_bar(Adw.HeaderBar(show_title=False))
+        dialog.set_child(toolbar)
         dialog.present(self)
+
+    def _link_row(self, title: str, subtitle: str, uri: str) -> Adw.ActionRow:
+        row = Adw.ActionRow(title=title, subtitle=subtitle, activatable=True)
+        row.set_tooltip_text(uri)
+        row.add_suffix(Gtk.Image(icon_name="adw-external-link-symbolic"))
+        row.connect(
+            "activated",
+            lambda _row: Gtk.UriLauncher(uri=uri).launch(self, None, None),
+        )
+        return row
 
     @staticmethod
     def _section_title(text: str) -> Gtk.Label:

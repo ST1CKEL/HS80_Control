@@ -11,6 +11,7 @@
 [![GTK4](https://img.shields.io/badge/GUI-GTK4%20%2F%20libadwaita%20%E2%89%A5%201.7-4a90d9.svg)](https://gnome.pages.gitlab.gnome.org/libadwaita/)
 [![Audio](https://img.shields.io/badge/Audio-PipeWire%20%2F%20ALSA-green.svg)](https://pipewire.org/)
 [![Fedora](https://img.shields.io/badge/Getestet%20auf-Fedora%2044%20%7C%2045-51a2da.svg)](https://fedoraproject.org/)
+[![Stickelbroeck Labs](https://img.shields.io/badge/von-Stickelbroeck%20Labs-0ea5a8.svg)](https://stickelbroeck.com/)
 
 **HS80 Control** ist eine performante, native Linux-Lösung zur vollständigen Steuerung des **Corsair HS80 RGB Wireless** Gaming-Headsets. Sowohl der kabellose Funkbetrieb über den mitgelieferten USB-Transceiver (`1b1c:0a6b`) als auch der direkte Kabelbetrieb (`1b1c:0a69`) werden nativ und ohne Windows oder iCUE unterstützt.
 
@@ -38,6 +39,7 @@ Die Suite umfasst einen leichtgewichtigen Hintergrunddienst (`hs80d`), eine asyn
 - [Fehlerbehebung & Diagnose (Doctor)](#fehlerbehebung--diagnose-doctor)
 - [Entwicklung, Tests & Paketbau](#entwicklung-tests--paketbau)
 - [Mitwirken](#mitwirken)
+- [Entwickelt von](#entwickelt-von)
 - [Lizenz & Haftungsausschluss](#lizenz--haftungsausschluss)
 
 ---
@@ -561,9 +563,23 @@ Fehlerberichte und Pull Requests sind willkommen – siehe [CONTRIBUTING.md](CON
 
 ---
 
+## Entwickelt von
+
+<p align="center">
+  <a href="https://stickelbroeck.com/">
+    <img src="docs/branding/stickelbroeck-labs.png" alt="Stickelbroeck Labs – Open Source Software" width="260">
+  </a>
+</p>
+
+<p align="center">
+  HS80 Control ist ein Projekt von <strong>Stickelbroeck Labs</strong>.<br>
+  <a href="https://stickelbroeck.com/">stickelbroeck.com</a>
+</p>
+
+---
+
 ## Lizenz & Haftungsausschluss
 
-HS80 Control wird von [Stickelbroeck Labs](https://stickelbroeck.com/) entwickelt.
 
 - **Programmcode & Treiber**: Lizenziert unter der [GNU General Public License v3.0 or later (GPL-3.0-or-later)](LICENSE).
 - **AppStream Metadaten**: Freigegeben unter [Creative Commons Zero v1.0 Universal (CC0-1.0)](LICENSE.CC0).

@@ -7,7 +7,7 @@ Alle nennenswerten Änderungen an HS80 Control. Das Format folgt
 ## [0.7.1] – 2026-11-14
 
 ### Geändert
-- „Über HS80 Control" und die AppStream-Metadaten nennen Stickelbroeck Labs als Entwickler, mit Link zu stickelbroeck.com.
+- „Über HS80 Control" nennt Stickelbroeck Labs als Entwickler, mit Logo und Link zu stickelbroeck.com. Auch die AppStream-Metadaten und das README führen den Entwickler auf.
 
 ## [0.7.0] – 2026-11-14
 

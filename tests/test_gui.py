@@ -30,6 +30,12 @@ class GuiPresentationTests(unittest.TestCase):
 
         cls.gui = gui
 
+    def test_developer_logo_ships_with_the_package(self) -> None:
+        self.assertEqual("Stickelbroeck Labs", self.gui.DEVELOPER_NAME)
+        self.assertTrue(self.gui.DEVELOPER_URL.startswith("https://stickelbroeck.com"))
+        with open(self.gui.DEVELOPER_LOGO, "rb") as handle:
+            self.assertEqual(b"\x89PNG\r\n\x1a\n", handle.read(8))
+
     def test_connection_states_are_distinct(self) -> None:
         self.assertEqual(
             ("●  Verbunden", "status-online"),
